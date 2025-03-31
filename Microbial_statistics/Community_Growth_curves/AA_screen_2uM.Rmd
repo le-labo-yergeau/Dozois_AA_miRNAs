@@ -1,0 +1,170 @@
+---
+title: "AA_screen_2μM"
+author: "Jessica A. Dozois"
+date: "2024-04-23"
+output: html_document
+---
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("L-AA_screen2uM","Output", "Figures"), recursive=TRUE)
+dir.create(file.path("L-AA_screen2uM","Output", "t.test_results"), recursive=TRUE)
+```
+
+#Importing data
+```{r Importation}
+#Proline
+Prodf<-read.table(file.path("L-AA_screen2uM","Raw_Data", "L-Proline.tsv"), header=T, sep="\t", comment.char = "") # 2580 obs 8 variables
+Prodf$Time<-as.factor(Prodf$Time)
+Prodf$Pair<-as.factor(Prodf$Pair)
+Prodf$Dose.uM.<-as.factor(Prodf$Dose.uM.)
+
+#Glycine
+Glydf<-read.table(file.path("L-AA_screen2uM","Raw_Data", "Glycine.tsv"), header=T, sep="\t", comment.char = "") # 2460 obs 8 variables
+Glydf$Time<-as.factor(Glydf$Time)
+Glydf$Pair<-as.factor(Glydf$Pair)
+Glydf$Dose.uM.<-as.factor(Glydf$Dose.uM.)
+
+#L-Lysine
+Lysdf<-read.table(file.path("L-AA_screen2uM","Raw_Data", "L-Lysine.tsv"), header=T, sep="\t", comment.char = "") # 2460 obs 8 variables
+Lysdf$Time<-as.factor(Lysdf$Time)
+Lysdf$Pair<-as.factor(Lysdf$Pair)
+Lysdf$Dose.uM.<-as.factor(Lysdf$Dose.uM.)
+
+#17 L-Amino acids
+mix17AA<-read.table(file.path("L-AA_screen2uM","Raw_Data", "L-AAmix_17.tsv"), header=T, sep="\t", comment.char = "") # 1260 obs 8 variables
+mix17AA$Time<-as.factor(mix17AA$Time)
+mix17AA$Pair<-as.factor(mix17AA$Pair)
+mix17AA$Dose.uM.<-as.factor(mix17AA$Dose.uM.)
+```
+
+#Renaming variables
+```{r}
+Prodf$Treatment<-recode_factor(Prodf$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+
+Glydf$Treatment<-recode_factor(Glydf$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+
+Lysdf$Treatment<-recode_factor(Lysdf$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+
+mix17AA$Treatment<-recode_factor(mix17AA$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+```
+
+#Subsetting by mirna
+```{r}
+Pro827<-Prodf[Prodf$miRNA=="ath827",]
+Pro5642b<-Prodf[Prodf$miRNA=="ath5642b",]
+
+Gly827<-Glydf[Glydf$miRNA=="ath827",]
+Gly5642b<-Glydf[Glydf$miRNA=="ath5642b",]
+
+Mix159<-mix17AA[mix17AA$miRNA=="aof159",]
+Mix827<-mix17AA[mix17AA$miRNA=="ath827",]
+  
+Lys158a3p<-Lysdf[Lysdf$miRNA=="ath158a3p",]
+Lys159<-Lysdf[Lysdf$miRNA=="aof159",]
+Lys827<-Lysdf[Lysdf$miRNA=="ath827",]
+```
+
+
+```{r}
+
+boxProath827<- ggplot( Pro827, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggPro827<-boxProath827  +labs(x="", y="")+ ylim(0,1.8)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("L-Proline ath-miR827")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggPro827_2<-ggPro827+annotate("rect",xmin = 20.5, xmax=23.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 25.5, xmax=27.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 29.5, xmax=31.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")
+
+boxProath5642b<- ggplot( Pro5642b, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggPro5642b<-boxProath5642b  +labs(x="", y="")+ ylim(0,1.8)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("L-Proline ath-miR5642b")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggPro5642b_2<-ggPro5642b+annotate("rect",xmin = 20.5, xmax=21.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 23.5, xmax=24.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 25.5, xmax=26.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")
+
+
+boxGlyath827<- ggplot( Gly827, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggGly827<-boxGlyath827  +labs(x="", y="")+ ylim(0,1.8)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("Glycine ath-miR827")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggGly827_2<-ggGly827+annotate("rect",xmin = 8.5, xmax=10.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")
+
+
+boxGlyath5642b<- ggplot( Gly5642b, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggGly5642b<-boxGlyath5642b  +labs(x="", y="")+ ylim(0,1.8)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("Glycine ath-miR5642b")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggGly5642b_2<-ggGly5642b+annotate("rect",xmin = 11.5, xmax=15.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 16.5, xmax=20.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 33.5, xmax=34.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 40.5, xmax=41.5, ymin = 0, ymax=1.8,alpha=.2, fill="#457b9d")
+
+boxMix159<- ggplot( Mix159, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggmix159<-boxMix159  +labs(x="", y="")+ ylim(0,2.5)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("Mix of 17 L-AA ath-miR159a")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggmix159_2<-ggmix159+annotate("rect",xmin = 7.5, xmax=8.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 9.5, xmax=13.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 14.5, xmax=15.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 16.5, xmax=17.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxMix827<- ggplot( Mix827, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggmix827<-boxMix827  +labs(x="", y="")+ ylim(0,2.5)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("Mix of 17 L-AA ath-miR827")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggmix827_2<-ggmix827+annotate("rect",xmin = 7.5, xmax=8.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 9.5, xmax=10.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxLys158a3p<- ggplot( Lys158a3p, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggLys158a3p<-boxLys158a3p  +labs(x="", y="")+ ylim(0,2.5)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("L-Lysine ath-miR158a-3p")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggLys158a3p_2<-ggLys158a3p+annotate("rect",xmin = 27.5, xmax=30.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 36.5, xmax=37.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxLys159<- ggplot( Lys159, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggLys159<-boxLys159  +labs(x="", y="")+ ylim(0,2)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("L-Lysine ath-miR159a")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggLys159_2<-ggLys159+annotate("rect",xmin = 26.5, xmax=29.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 31.5, xmax=33.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 35.5, xmax=36.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")
+
+
+boxLys827<- ggplot( Lys827, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+ theme_pubclean() + 
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggLys827<-boxLys827  +labs(x=" ", y="")+ ylim(0,2)+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("L-Lysine ath-miR827")+ theme(plot.title = element_text(size = 14, color="#457b9d"))
+ggLys827_2<-ggLys827+annotate("rect",xmin = 21.5, xmax=23.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 30.5, xmax=31.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 36.5, xmax=37.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")
+
+```
+
+
+#Final figure
+```{r}
+figdoserep2uM<- ggarrange(ggPro827_2,ggPro5642b_2,ggGly827_2,ggGly5642b_2, ggmix159_2, ggmix827_2, ggLys158a3p_2, ggLys159_2, ggLys827_2, common.legend = T, ncol=3,nrow=3)
+figdoserep2uM
+finalfig2uM<-annotate_figure(figdoserep2uM,left = text_grob("Optical Density (600nm)", color = "grey22", rot = 90, size=16), bottom=text_grob("Time (hours)", color = "grey22",size=16))
+ggsave(finalfig2uM, file=here("L-AA_screen2uM","Output","Figures","L-AA_2μM.tiff"),width = 30, height = 30, units = "cm", compression='lzw')
+
+saveRDS(finalfig2uM,file = here("L-AA_screen2uM","Output","L-AA_screen2uM.rds"))
+
+
+```
+

@@ -1,0 +1,1215 @@
+---
+title: "AA_screen_10uM"
+author: "Jessica A. Dozois"
+date: "2024-04-23"
+output: html_document
+---
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("L-AA_screen10uM","Output", "Figures"), recursive=TRUE)
+dir.create(file.path("L-AA_screen10uM","Output", "t.test_results"), recursive=TRUE)
+```
+
+#Importing data
+```{r Importation}
+Dosedf<-read.table(file.path("L-AA_screen10uM","Raw_Data", "L-AA_screen.tsv"), header=T, sep="\t", comment.char = "") # 4452 obs 8 variables
+Dosedf$Time<-as.factor(Dosedf$Time)
+Dosedf$Pair<-as.factor(Dosedf$Pair)
+Dosedf$Dose.uM.<-as.factor(Dosedf$Dose.uM.)
+
+Dosedf2<-read.table(file.path("L-AA_screen10uM","Raw_Data", "L-AA_screen2.tsv"), header=T, sep="\t", comment.char = "") # 4452 obs 9 variables
+Dosedf2$Time<-as.factor(Dosedf2$Time)
+Dosedf2$Pair<-as.factor(Dosedf2$Pair)
+Dosedf2$Dose.uM.<-as.factor(Dosedf2$Dose.uM.)
+
+Dosedf3<-read.table(file.path("L-AA_screen10uM","Raw_Data", "L-AA_screen3.tsv"), header=T, sep="\t", comment.char = "") # 4452 obs 8 variables
+Dosedf3$Time<-as.factor(Dosedf3$Time)
+Dosedf3$Pair<-as.factor(Dosedf3$Pair)
+Dosedf3$Dose.uM.<-as.factor(Dosedf3$Dose.uM.)
+```
+#Renaming variables
+```{r}
+Dosedf$Treatment<-recode_factor(Dosedf$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+Dosedf2$Treatment<-recode_factor(Dosedf2$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+Dosedf3$Treatment<-recode_factor(Dosedf3$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+```
+
+#Subsetting by N source
+```{r}
+Try<-Dosedf[Dosedf$N_source=="L-Tryptophan",]
+Try<-Try[Try$miRNA=="mix_5",]
+Met<-Dosedf[Dosedf$N_source=="L-Methionine",]
+Met<-Met[Met$miRNA=="mix_5",]
+Pro<-Dosedf[Dosedf$N_source=="L-Proline",]
+Pro<-Pro[Pro$miRNA=="mix_5",]
+Gly<-Dosedf[Dosedf$N_source=="Glycine",]
+Gly<-Gly[Gly$miRNA=="mix_5",]
+Lys<-Dosedf[Dosedf$N_source=="L-Lysine",]
+Lys<-Lys[Lys$miRNA=="mix_5",]
+Iso<-Dosedf[Dosedf$N_source=="L-Isoleucine",]
+Iso<-Iso[Iso$miRNA=="mix_5",]
+
+Ala<-Dosedf2[Dosedf2$N_source=="L-Alanine",]
+Ala<-Ala[Ala$miRNA=="mix_5",]
+Asp<-Dosedf2[Dosedf2$N_source=="L-Aspartic_acid",]
+Asp<-Asp[Asp$miRNA=="mix_5",]
+Arg<-Dosedf2[Dosedf2$N_source=="L-Arginine",]
+Arg<-Arg[Arg$miRNA=="mix_5",]
+Cys<-Dosedf2[Dosedf2$N_source=="L-Cysteine",]
+Cys<-Cys[Cys$miRNA=="mix_5",]
+His<-Dosedf2[Dosedf2$N_source=="L-Histidine",]
+His<-His[His$miRNA=="mix_5",]
+Glu<-Dosedf2[Dosedf2$N_source=="L-Glutamic_acid",]
+Glu<-Glu[Glu$miRNA=="mix_5",]
+
+Leu<-Dosedf3[Dosedf3$N_source=="L-Leucine",]
+Leu<-Leu[Leu$miRNA=="mix_5",]
+Phe<-Dosedf3[Dosedf3$N_source=="L-Phenylalanine",]
+Phe<-Phe[Phe$miRNA=="mix_5",]
+Ser<-Dosedf3[Dosedf3$N_source=="L-Serine",]
+Ser<-Ser[Ser$miRNA=="mix_5",]
+Thr<-Dosedf3[Dosedf3$N_source=="L-Threonine",]
+Thr<-Thr[Thr$miRNA=="mix_5",]
+Val<-Dosedf3[Dosedf3$N_source=="L-Valine",]
+Val<-Val[Val$miRNA=="mix_5",]
+Mix17<-Dosedf3[Dosedf3$N_source=="Mix17",]
+Mix17<-Mix17[Mix17$miRNA=="mix_5",]
+```
+
+#Statistical tests
+```{r}
+loop<-levels(Dosedf$Time)
+#L-Tryptophan
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Try[Try$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Try.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Try[Try$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Try_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Try[Try$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Try_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Methionine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Met[Met$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Met.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Met[Met$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Met_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Met[Met$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Met_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Proline
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Pro[Pro$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Pro.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Pro[Pro$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Pro_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Pro[Pro$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Pro_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#Glycine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Gly[Gly$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_Gly.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Gly[Gly$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","Gly_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Gly[Gly$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","Gly_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Lysine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Lys[Lys$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Lys.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Lys[Lys$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Lys_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Lys[Lys$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Lys_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Isoleucine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Iso[Iso$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Iso.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Iso[Iso$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Iso_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Iso[Iso$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Iso_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+loop<-levels(Dosedf2$Time)
+#L-Alanine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Ala[Ala$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Ala.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Ala[Ala$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Ala_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Ala[Ala$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Ala_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Aspartic acid
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Asp[Asp$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Asp.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Asp[Asp$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Asp_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Asp[Asp$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Asp_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Arginine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Arg[Arg$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Arg.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Arg[Arg$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Arg_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Arg[Arg$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Arg_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#Cysteine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Cys[Cys$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_Cys.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Cys[Cys$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","Cys_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Cys[Cys$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","Cys_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Histidine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-His[His$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-His.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-His[His$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-His_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-His[His$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-His_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Glutamic acid
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Glu[Glu$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Glu.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Glu[Glu$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Glu_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Glu[Glu$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Glu_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+loop<-levels(Dosedf3$Time)
+#L-Leucine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Leu[Leu$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Leu.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Leu[Leu$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Leu_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Leu[Leu$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Leu_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Phenylalanine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Phe[Phe$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Phe.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Phe[Phe$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Phe_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Phe[Phe$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Phe_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Serine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Ser[Ser$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Ser.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Ser[Ser$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Ser_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Ser[Ser$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Ser_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#Threonine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Thr[Thr$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_Thr.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Thr[Thr$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","Thr_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Thr[Thr$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","Thr_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#L-Valine
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Val[Val$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Val.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Val[Val$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Val_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Val[Val$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Val_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+#Mix of 17 L-AA
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Mix17[Mix17$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("L-AA_screen10uM","Output","t.test_results","AssμMp_L-Mix17.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Mix17[Mix17$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Mix17_t.test.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-Mix17[Mix17$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("L-AA_screen10uM","Output","t.test_results","L-Mix17_wilcox.test.txt"), append=T) 
+  } 
+ i=i+1}
+
+```
+
+
+#Boxplots
+```{r}
+boxTry<- ggplot( Try, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggTry<-boxTry  +ylim(0,2)+ theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Tryptophan")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggTry<-ggTry+annotate("rect",xmin = 30.5, xmax=32.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")
+
+boxMet<- ggplot( Met, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggMet<-boxMet  +ylim(0,2)+ theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12))+ ggtitle("10 μM L-Methionine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))
+ggMet<-ggMet+annotate("rect",xmin = 17.5, xmax=18.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+labs(x="",y="")
+
+boxPro<- ggplot( Pro, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggPro<-boxPro  + ylim(0,2.7) +theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Proline")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggPro<-ggPro+annotate("rect",xmin = 10.5, xmax=14.5, ymin = 0, ymax=2.7,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 15.5, xmax=18.5, ymin = 0, ymax=2.7,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 24.5, xmax=25.5, ymin = 0, ymax=2.7,alpha=.2, fill="#457b9d")
+
+boxGly<- ggplot( Gly, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggGly<-boxGly  + ylim(0,2.5) +theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM Glycine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggGly<-ggGly+annotate("rect",xmin = 16.5, xmax=19.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 24.5, xmax=26.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxLys<- ggplot( Lys, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggLys<-boxLys  + ylim(0,2.5)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Lysine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggLys<-ggLys+annotate("rect",xmin = 9.5, xmax=11.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 12.5, xmax=14.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 24.5, xmax=28.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 29.5, xmax=31.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 32.5, xmax=38.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 45.5, xmax=53.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxIso<- ggplot( Iso, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggIso<-boxIso  + ylim(0,2.5) +theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Isoleucine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggIso<-ggIso+annotate("rect",xmin = 39.5, xmax=41.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 45.5, xmax=47.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 48.5, xmax=49.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxAla<- ggplot( Ala, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggAla<-boxAla  + ylim(0,2.5)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Alanine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggAla<-ggAla+annotate("rect",xmin = 17.5, xmax=20.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 34.5, xmax=35.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxAsp<- ggplot( Asp, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggAsp<-boxAsp  + ylim(0,2.7)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Aspartic acid")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggAsp<-ggAsp+annotate("rect",xmin = 14.5, xmax=28.5, ymin = 0, ymax=2.7,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 30.5, xmax=33.5, ymin = 0, ymax=2.7,alpha=.2, fill="#457b9d")
+
+boxArg<- ggplot(Arg, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))+labs(x="",y="")
+ggArg<-boxArg + ylim(0,2.7)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Arginine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+
+
+boxCys<- ggplot( Cys, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggCys<-boxCys  + ylim(0,2)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Cysteine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggCys<-ggCys+annotate("rect",xmin = 13.5, xmax=14.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")
+
+boxHis<- ggplot( His, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggHis<-boxHis  + ylim(0,2.3)+ theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Histidine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggHis<-ggHis+annotate("rect",xmin = 20.5, xmax=21.5, ymin = 0, ymax=2.3,alpha=.2, fill="#457b9d")
+
+boxGlu<- ggplot( Glu, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggGlu<-boxGlu  + ylim(0,2.5)+ theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Glutamic acid")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggGlu<-ggGlu+annotate("rect",xmin = 5.5, xmax=6.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 30.5, xmax=31.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+boxLeu<- ggplot( Leu, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggLeu<-boxLeu  + ylim(0,2)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ggtitle("10 μM L-Leucine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggLeu<-ggLeu+annotate("rect",xmin = 39.5, xmax=40.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 42.5, xmax=43.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 46.5, xmax=47.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 48.5, xmax=53.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")
+
+boxPhe<- ggplot( Phe, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggPhe<-boxPhe  + ylim(0,1.5)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Phenylalanine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggPhe<-ggPhe+annotate("rect",xmin = 20.5, xmax=22.5, ymin = 0, ymax=1.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 24.5, xmax=26.5, ymin = 0, ymax=1.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 32.5, xmax=33.5, ymin = 0, ymax=1.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 35.5, xmax=36.5, ymin = 0, ymax=1.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 37.5, xmax=38.5, ymin = 0, ymax=1.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 39.5, xmax=40.5, ymin = 0, ymax=1.5,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 47.5, xmax=50.5, ymin = 0, ymax=1.5,alpha=.2, fill="#457b9d")
+
+boxSer<- ggplot( Ser, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggSer<-boxSer  + ylim(0,2)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Serine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+
+
+boxThr<- ggplot( Thr, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggThr<-boxThr  + ylim(0,1.2)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Threonine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+
+boxVal<- ggplot( Val, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggVal<-boxVal  + ylim(0,2)+  theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM L-Valine")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggVal<-ggVal+annotate("rect",xmin = 30.5, xmax=39.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 40.5, xmax=45.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")+annotate("rect",xmin = 50.5, xmax=52.5, ymin = 0, ymax=2,alpha=.2, fill="#457b9d")
+
+boxMix17<- ggplot( Mix17, aes(x=Time, y=OD_600 ,fill=Treatment, colour=Treatment)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge())+
+  scale_fill_manual(values = c("#457b9d","grey"))+
+scale_colour_manual(values = c("#457b9d","grey"))
+ggMix<-boxMix17  + ylim(0,2.5) +theme_pubclean()+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12),axis.text.x=element_blank(), axis.ticks.x=element_blank())+ ggtitle("10 μM Mix of 17 L-AA")+ theme(plot.title = element_text(size = 14, colour ="#457b9d"))+labs(x="",y="")
+ggMix<-ggMix+annotate("rect",xmin = 7.5, xmax=9.5, ymin = 0, ymax=2.5,alpha=.2, fill="#457b9d")
+
+```
+
+
+#Final figure
+```{r}
+figdoserep<- ggarrange(ggMix,ggGly,ggLys,ggPhe,ggPro,ggIso,ggLeu,ggVal,common.legend = T, ncol=2,nrow=4)
+figdoserep
+finalfig<-annotate_figure(figdoserep,left = text_grob("Optical Density (600nm)", color = "grey22", rot = 90, size=16), bottom=text_grob("Time (hours)", color = "grey22",size=16))
+ggsave(finalfig, file=here("L-AA_screen10uM","Output","Figures","L-AA_10μM.tiff"),width = 20, height = 30, units = "cm", compression='lzw')
+
+
+```
+
+#Supplementary figure
+```{r}
+Allfig<- ggarrange(ggAla,ggArg,ggAsp,ggCys,ggHis,ggIso,ggGly,ggGlu,ggLeu,ggLys,ggMet,ggPhe,ggPro,ggSer,ggThr,ggTry,ggVal,ggMix,common.legend = T, ncol=3,nrow=6)
+Allfig
+
+Allfig_supp<-annotate_figure(Allfig,left = text_grob("Optical Density (600nm)", color = "grey22", rot = 90, size=16), bottom=text_grob("Time (hours)", color = "grey22",size=16))
+ggsave(Allfig_supp, file=here("L-AA_screen10uM","Output","Figures","Supp_ALL_AA_10μM.tiff"),width = 20, height = 30, units = "cm", compression='lzw')
+saveRDS(Allfig_supp,file = here("L-AA_screen10uM","Output","L-AA_screen10uM.rds"))
+```
+
+

@@ -1,0 +1,373 @@
+---
+title: "AUC_stats_10uM"
+author: "Marc-Antoine Duchesne"
+date: "2024-09-25"
+output: html_document
+---
+
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,tidyr,forcats,here,ggpubr,car,rstatix, pracma, purrr,ggh4x,rstatix)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "test_AUC_10uM"), recursive=TRUE)
+
+```
+
+#Importing data
+```{r Importation}
+Dosedf<-read.table(file.path("L-AA_screen10uM","Raw_Data", "L-AA_screen.tsv"), header=T, sep="\t", comment.char = "") # 4452 obs 8 variables
+Dosedf$Time<-as.numeric(Dosedf$Time)
+Dosedf$Pair<-as.factor(Dosedf$Pair)
+Dosedf$Dose.uM.<-as.factor(Dosedf$Dose.uM.)
+
+Dosedf2<-read.table(file.path("L-AA_screen10uM","Raw_Data", "L-AA_screen2.tsv"), header=T, sep="\t", comment.char = "") # 4452 obs 9 variables
+Dosedf2$Time<-as.numeric(Dosedf2$Time)
+Dosedf2$Pair<-as.factor(Dosedf2$Pair)
+Dosedf2$Dose.uM.<-as.factor(Dosedf2$Dose.uM.)
+
+Dosedf3<-read.table(file.path("L-AA_screen10uM","Raw_Data", "L-AA_screen3.tsv"), header=T, sep="\t", comment.char = "") # 4452 obs 8 variables
+Dosedf3$Time<-as.numeric(Dosedf3$Time)
+Dosedf3$Pair<-as.factor(Dosedf3$Pair)
+Dosedf3$Dose.uM.<-as.factor(Dosedf3$Dose.uM.)
+```
+
+#Renaming variables
+```{r}
+Dosedf$Treatment<-recode_factor(Dosedf$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+Dosedf2$Treatment<-recode_factor(Dosedf2$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+Dosedf3$Treatment<-recode_factor(Dosedf3$Treatment, scrambled_miRNA= "Scramble miRNAs",plant_miRNA="Plant miRNAs" )
+```
+
+#Subsetting data 
+```{r}
+#Removing Controls
+Dosedf<-Dosedf[!Dosedf$Treatment=="N.A.",]
+Dosedf2<-Dosedf2[!Dosedf2$Treatment=="N.A.",]
+Dosedf3<-Dosedf3[!Dosedf3$Treatment=="N.A.",]
+
+#Separating by N_source
+Pro<-Dosedf[Dosedf$N_source=="L-Proline",]
+Pro<-Pro[Pro$miRNA=="mix_5",]
+Gly<-Dosedf[Dosedf$N_source=="Glycine",]
+Gly<-Gly[Gly$miRNA=="mix_5",]
+Lys<-Dosedf[Dosedf$N_source=="L-Lysine",]
+Lys<-Lys[Lys$miRNA=="mix_5",]
+Iso<-Dosedf[Dosedf$N_source=="L-Isoleucine",]
+Iso<-Iso[Iso$miRNA=="mix_5",]
+Leu<-Dosedf3[Dosedf3$N_source=="L-Leucine",]
+Leu<-Leu[Leu$miRNA=="mix_5",]
+Phe<-Dosedf3[Dosedf3$N_source=="L-Phenylalanine",]
+Phe<-Phe[Phe$miRNA=="mix_5",]
+Val<-Dosedf3[Dosedf3$N_source=="L-Valine",]
+Val<-Val[Val$miRNA=="mix_5",]
+Mix17<-Dosedf3[Dosedf3$N_source=="Mix17",]
+Mix17<-Mix17[Mix17$miRNA=="mix_5",]
+```
+
+#listing subsets
+```{r}
+subset_list <- list(
+  Pro_0_16 = Pro_0_16 <- subset(Pro, Time >= 0 & Time <= 16),
+  Pro_17_28 = Pro_17_28 <- subset(Pro, Time >= 17 & Time <= 28),
+  Pro_29_52 = Pro_29_52 <- subset(Pro, Time >= 29 & Time <= 52),
+
+  Gly_0_14 = Gly_0_14 <- subset(Gly, Time >= 0 & Time <= 14),
+  Gly_15_18 = Gly_15_18 <- subset(Gly, Time >= 15 & Time <= 18),
+  Gly_19_27 = Gly_19_27 <- subset(Gly, Time >= 19 & Time <= 27),
+  Gly_28_52 = Gly_28_52 <- subset(Gly, Time >= 28 & Time <= 52),
+
+  Lys_0_22 = Lys_0_22 <- subset(Lys, Time >= 0 & Time <= 22),
+  Lys_23_38 = Lys_23_38 <- subset(Lys, Time >= 23 & Time <= 38),
+  Lys_39_52 = Lys_39_52 <- subset(Lys, Time >= 39 & Time <= 52),
+
+  Iso_0_38 = Iso_0_38 <- subset(Iso, Time >= 0 & Time <= 38),
+  Iso_39_52 = Iso_39_52 <- subset(Iso, Time >= 39 & Time <= 52),
+
+  Leu_0_38 = Leu_0_38 <- subset(Leu, Time >= 0 & Time <= 38),
+  Leu_39_52 = Leu_39_52 <- subset(Leu, Time >= 39 & Time <= 52),
+
+  Phe_0_19 = Phe_0_19 <- subset(Phe, Time >= 0 & Time <= 19),
+  Phe_20_33 = Phe_20_33 <- subset(Phe, Time >= 20 & Time <= 33),
+  Phe_34_52 = Phe_34_52 <- subset(Phe, Time >= 34 & Time <= 52),
+
+  Val_0_21 = Val_0_21 <- subset(Val, Time >= 0 & Time <= 21),
+  Val_22_52 = Val_22_52 <- subset(Val, Time >= 22 & Time <= 52),
+
+  Mix17_0_5 = Mix17_0_5 <- subset(Mix17, Time >= 0 & Time <= 5),
+  Mix17_6_12 = Mix17_6_12 <- subset(Mix17, Time >= 6 & Time <= 12),
+  Mix17_13_52 = Mix17_13_52 <- subset(Mix17, Time >= 13 & Time <= 52)
+)
+
+```
+
+#Calculating AUC with time interval
+```{r}
+# List to store AUC results for each subset, miRNA, and Pair
+results_list <- list()
+
+# Calculate AUC for each subset, miRNA, and Pair
+for (name in names(subset_list)) {
+  subset_data <- subset_list[[name]]
+  
+  # Convert Treatment column to character to avoid factor issues
+  subset_data$Treatment <- as.character(subset_data$Treatment)
+  
+  # Get unique Treatments in the subset
+  subset_data$Treatment <- droplevels(as.factor(subset_data$Treatment))
+  subset_data$Treatment <- droplevels(subset_data$Treatment)
+  Treatment_types <- unique(subset_data$Treatment)
+  
+  # Initialize a list to store AUC for each Treatment
+  auc_Treatment <- list()
+  
+  # Loop through each Treatment type
+  for (Treatment_type in Treatment_types) {
+    # Subset data for the current Treatment
+    Treatment_data <- subset(subset_data, Treatment == Treatment_type)
+    
+    # Get unique Pair in the subset for the current Treatment
+    Treatment_data$Pair <- droplevels(Treatment_data$Pair)
+    Pair <- unique(Treatment_data$Pair)
+    
+    # Initialize a vector to store AUC for each Pair
+    auc_Pair <- numeric(length(Pair))
+    names(auc_Pair) <- Pair
+    
+    # Calculate AUC for each Pair
+    for (rep in Pair) {
+      # Subset data for both Treatment and Pair
+      Pair_data <- subset(Treatment_data, Pair == rep)
+      
+      # Convert Time and OD_600 to numeric
+      Pair_data$Time <- as.numeric(Pair_data$Time)
+      Pair_data$OD_600 <- as.numeric(Pair_data$OD_600)
+      
+      # Check for missing or non-numeric values
+      if (any(is.na(Pair_data$Time)) || any(is.na(Pair_data$OD_600))) {
+        warning(paste("Missing values in", name, "for Treatment", Treatment_type, "Pair", rep))
+      } else {
+        # Calculate AUC using the trapz function
+        auc_Pair[rep] <- trapz(Pair_data$Time, Pair_data$OD_600)
+        
+        # Calculate the time interval
+        Time_interval <- max(Pair_data$Time) - min(Pair_data$Time)
+        
+        # Extract N_source from Pair_data
+        N_source <- unique(Pair_data$N_source)
+        
+        # Store the results in a data frame
+        auc_data <- data.frame(
+          N_source = N_source,
+          Treatment = Treatment_type,
+          Pair = rep,
+          AUC = auc_Pair[rep],
+          Time_interval = Time_interval
+        )
+        
+        # Append to results list
+        results_list[[length(results_list) + 1]] <- auc_data
+      }
+    }
+  }
+}
+
+# Combine all data frames into one
+final_results_df <- do.call(rbind, results_list)
+
+# Print the final results data frame
+print(final_results_df)
+
+```
+
+#subsetting data from final_results_df
+```{r}
+Pro_AUC<-final_results_df[final_results_df$N_source=="L-Proline",]
+Gly_AUC<-final_results_df[final_results_df$N_source=="Glycine",]
+Lys_AUC<-final_results_df[final_results_df$N_source=="L-Lysine",]
+Iso_AUC<-final_results_df[final_results_df$N_source=="L-Isoleucine",]
+Leu_AUC<-final_results_df[final_results_df$N_source=="L-Leucine",]
+Phe_AUC<-final_results_df[final_results_df$N_source=="L-Phenylalanine",]
+Val_AUC<-final_results_df[final_results_df$N_source=="L-Valine",]
+Mix17_AUC<-final_results_df[final_results_df$N_source=="Mix17",]
+
+
+Pro_0_16_AUC <- subset(Pro_AUC, Time_interval == 16) # 16 - 0 = 16
+Pro_17_28_AUC <- subset(Pro_AUC, Time_interval == 11)  # 28 - 17 = 11
+Pro_23_AUC = Pro_29_52_AUC <- subset(Pro_AUC, Time_interval == 23)   # 52 - 29 = 23
+Gly_0_14_AUC <- subset(Gly_AUC, Time_interval == 14)     # 14 - 0 = 14
+Gly_15_18_AUC <- subset(Gly_AUC, Time_interval == 3)    # 18 - 15 = 3
+Gly_19_27_AUC <- subset(Gly_AUC, Time_interval == 8)    # 27 - 19 = 8
+Gly_28_52_AUC <- subset(Gly_AUC, Time_interval == 24)    # 52 - 28 = 24
+Lys_0_22_AUC <- subset(Lys_AUC, Time_interval == 22)    # 22 - 0 = 22
+Lys_23_38_AUC <- subset(Lys_AUC, Time_interval == 15)    # 38 - 23 = 15
+Lys_39_52_AUC <- subset(Lys_AUC, Time_interval == 13)     # 52 - 39 = 13
+Iso_0_38_AUC <- subset(Iso_AUC, Time_interval == 38)    # 38 - 0 = 38
+Iso_39_52_AUC <- subset(Iso_AUC, Time_interval == 13)   # 52 - 39 = 13
+Leu_0_38_AUC <- subset(Leu_AUC, Time_interval == 38)   # 38 - 0 = 38
+Leu_39_52_AUC <- subset(Leu_AUC, Time_interval == 13)     # 52 - 39 = 13
+Phe_0_19_AUC <- subset(Phe_AUC, Time_interval == 19)   # 19 - 0 = 19
+Phe_20_33_AUC <- subset(Phe_AUC, Time_interval == 13)    # 33 - 20 = 13
+Phe_34_52_AUC <- subset(Phe_AUC, Time_interval == 18)    # 52 - 34 = 18
+Val_0_21_AUC <- subset(Val_AUC, Time_interval == 21)    # 21 - 0 = 21
+Val_22_52_AUC <- subset(Val_AUC, Time_interval == 30)     # 52 - 22 = 30
+Mix17_0_5_AUC <- subset(Mix17_AUC, Time_interval == 5)   # 5 - 0 = 5
+Mix17_6_12_AUC <- subset(Mix17_AUC, Time_interval == 6) # 12 - 6 = 6
+Mix17_13_52_AUC <- subset(Mix17_AUC, Time_interval == 39) # 52 - 13 = 39
+
+
+```
+
+#Paired t-test
+```{r}
+
+# Remove all files in the output folder
+unlink(here("Output", "test_AUC", "*"), recursive = TRUE)
+
+subset_names <- c("Pro_0_16_AUC", "Pro_17_28_AUC", "Pro_29_52_AUC",
+                  "Gly_0_14_AUC", "Gly_15_18_AUC","Gly_19_27_AUC", "Gly_28_52_AUC",
+                  "Lys_0_22_AUC", "Lys_23_38_AUC", "Lys_39_52_AUC",
+                  "Iso_0_38_AUC", "Iso_39_52_AUC",
+                  "Leu_0_38_AUC", "Leu_39_52_AUC",
+                  "Phe_0_19_AUC", "Phe_20_33_AUC", "Phe_34_52_AUC",
+                  "Val_0_21_AUC", "Val_22_52_AUC",
+                  "Mix17_0_5_AUC", "Mix17_6_12_AUC", "Mix17_13_52_AUC")
+
+# Loop through each subset
+for (subset_name in subset_names) {
+  # Get the subset data
+  subset_data <- get(subset_name)
+  
+  # Check if the subset is empty
+  if (nrow(subset_data) == 0) {
+    next
+  }
+  
+  # Extract and order Plant data
+  plant <- subset_data[subset_data$Treatment =="Plant miRNAs",]
+  planto <- plant[order(plant$Pair), ]
+  mirplant <- planto$AUC
+  
+  # Extract and order Scramble data
+  scram <- subset_data[subset_data$Treatment =="Scramble miRNAs",]
+  scramo <- scram[order(scram$Pair), ]
+  mirscram <- scramo$AUC
+  
+  # Calculate differences and identify outliers
+  differences <- as.data.frame(mirscram - mirplant)
+  outliers <- identify_outliers(differences)
+  test_shapiro <- shapiro_test(differences$`mirscram - mirplant`)
+  
+  # Check for outliers or normality
+  if (nrow(outliers) >= 1 || test_shapiro$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_shapiro$p.value, 
+        "Statistic:", test_shapiro$statistic, 
+        "Outliers:", outliers$is.outlier, 
+        "\n", 
+        file = here("Output", "test_AUC_10uM", paste0(subset_name, ".txt")), 
+        append = TRUE)
+  }
+  
+  # Perform t-test (paired, one-sided, greater)
+  test_t <- t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+  
+  if (test_t$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_t$p.value, 
+        "statistic:", test_t$statistic, 
+        "\n", 
+        file = here("Output", "test_AUC_10uM", paste0(subset_name, "_t.test_greater.txt")), 
+        append = TRUE)
+  }
+  
+  # Perform t-test (paired, one-sided, less)
+  test_t <- t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+  
+  if (test_t$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_t$p.value, 
+        "statistic:", test_t$statistic, 
+        "\n", 
+        file = here("Output", "test_AUC_10uM", paste0(subset_name, "_t.test_less.txt")), 
+        append = TRUE)
+  }
+}
+
+
+```
+
+
+##Boxplots for AUC
+
+```{r}
+sig_hits<-c('3','5','8','13','15','16','30')
+AUC_sig_hits <- final_results_df[final_results_df$Time_interval %in% sig_hits, ]
+
+#Replace values in Time_interval with growth phases for L-Lysine
+AUC_sig_hits <- AUC_sig_hits %>%
+  mutate(Time_interval = as.character(Time_interval),  # Convert all to character first
+         Time_interval = case_when(
+           N_source == "L-Lysine" & Time_interval == "13" ~ "Stationary",
+           N_source == "L-Lysine" & Time_interval == "15" ~ "Exponential",
+           N_source == "L-Lysine" ~ Time_interval,  # Keep Time_interval as is for other values
+           TRUE ~ Time_interval  # Keep other values unchanged
+         ))
+
+    # Replace values in Time_interval with growth phases for the rest of AA
+AUC_sig_hits <- AUC_sig_hits %>%
+  mutate(Time_interval = as.character(Time_interval)) %>%
+  mutate(Time_interval = case_when(
+    Time_interval == "3" ~ "Early \n exponential",
+    Time_interval == "5" ~ "Exponential",
+    Time_interval == "8" ~ "Exponential",
+    Time_interval == "13" ~ "Exponential",
+    Time_interval == "15" ~ "Exponential",
+    Time_interval == "16" ~ "Exponential",
+    Time_interval == "30" ~ "Stationary",
+    TRUE ~ Time_interval  # Keep other values unchanged
+  ))
+
+
+# Replace "Mix17" with "Mix 17 AA" in the N_source column
+AUC_sig_hits <- AUC_sig_hits %>%
+  mutate(N_source = case_when(
+    N_source == "Mix17" ~ "Mix 17 AA",
+    TRUE ~ N_source  # Keep other values unchanged
+  ))
+
+#Fix order so Lysine is not in two seperate rows on the figure
+AUC_sig_hits$N_source <- factor(AUC_sig_hits$N_source, levels = c('Mix 17 AA','Glycine', 'L-Lysine','L-Isoleucine','L-Leucine','L-Phenylalanine','L-Proline','L-Valine'))
+
+#Fix order of the miRNA treatment
+AUC_sig_hits$Treatment <- factor(AUC_sig_hits$Treatment, levels = c('Scramble miRNAs','Plant miRNAs'))
+
+
+
+box_sig<- ggplot(AUC_sig_hits, aes(x=Treatment, y=AUC)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge())+
+  theme_light() +
+  facet_nested_wrap(~N_source + Time_interval, scales="free_y", nrow=2,nest_line = TRUE) +
+scale_x_discrete()+
+   labs(
+    x = NULL,  # Remove x-axis label
+    y = "Area under the curve "  # Change to your desired y-axis label
+  ) +
+theme(axis.text.x=element_blank() ,axis.ticks.x = element_blank(),strip.background = element_rect(fill="white", linewidth =1, linetype="solid"),strip.background.x = element_rect(fill="white", color="#003049", linewidth=0.2, linetype = 'dotted'))+
+theme(strip.text = element_text(colour = 'black', size=9))+
+scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))
+box_sig
+
+
+ggsave(box_sig, file=here("Output","Figures","AUC_sig.tiff"),units="cm", width=25, height=15, compression='lzw')
+saveRDS(box_sig,file = here("Output","Figures","AUC_sig.rds"))
+
+
+```
+
