@@ -1,0 +1,748 @@
+---
+title: "2_Acinetobacter_AA"
+author: "Jessica A. Dozois"
+date: "2025-01-20"
+output: html_document
+---
+
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix,gridExtra,,pracma)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "t.test_results", "Growth_curves"), recursive=TRUE)
+```
+
+#Importation
+```{r setup, include=FALSE}
+ReplicaAB<- read.table(file.path("Raw_Data", "Acinetobacter","Acineto_AB.txt"), header = TRUE, sep="\t") #142 obs. 8 var.
+ReplicaCDE<- read.table(file.path("Raw_Data", "Acinetobacter","Acineto_CDE.txt"), header = TRUE, sep="\t") #234 obs. 8 var.
+
+
+```
+
+#Standard curves for each Assay (540nm) 
+
+```{r}
+##ASSAY AB
+samplesAB<-ReplicaAB[!ReplicaAB$Treatment=="std",]
+samplesAB1<-samplesAB[samplesAB$Plate=="1",]
+samplesAB2<-samplesAB[samplesAB$Plate=="2",]
+
+#Standard curves plates AB
+standardsAB<- ReplicaAB[ReplicaAB$Treatment=="std",]
+
+standardsAB1<-standardsAB[standardsAB$Plate=="1",]
+standardsAB1$N_Source<-as.numeric((standardsAB1$N_Source))
+standardsAB1<-standardsAB1[!standardsAB1$N_Source=="500",]
+
+nm540AB1<- ggplot(standardsAB1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Acinetobacter AB1')
+nm540AB1 
+
+
+standardsAB2<-standardsAB[standardsAB$Plate=="2",]
+standardsAB2$N_Source<-as.numeric((standardsAB2$N_Source))
+standardsAB2<-standardsAB2[!standardsAB2$N_Source=="500",]
+
+nm540AB2<- ggplot(standardsAB2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Acinetobacter AB2')
+nm540AB2 
+
+
+##ASSAY CDE
+samplesCDE<-ReplicaCDE[!ReplicaCDE$Treatment=="std",]
+samplesCDE1<-samplesCDE[samplesCDE$Plate=="1",]
+samplesCDE2<-samplesCDE[samplesCDE$Plate=="2",]
+samplesCDE3<-samplesCDE[samplesCDE$Plate=="3",]
+
+#Standard curves plates CDE
+standardsCDE<- ReplicaCDE[ReplicaCDE$Treatment=="std",]
+
+standardsCDE1<-standardsCDE[standardsCDE$Plate=="1",]
+standardsCDE1$N_Source<-as.numeric((standardsCDE1$N_Source))
+standardsCDE1<-standardsCDE1[!standardsCDE1$N_Source=="500",]
+
+nm540CDE1<- ggplot(standardsCDE1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Acinetobacter CDE1')
+nm540CDE1 
+
+
+standardsCDE2<-standardsCDE[standardsCDE$Plate=="2",]
+standardsCDE2$N_Source<-as.numeric((standardsCDE2$N_Source))
+standardsCDE2<-standardsCDE2[!standardsCDE2$N_Source=="500",]
+
+nm540CDE2<- ggplot(standardsCDE2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Acinetobacter CDE2')
+nm540CDE2 
+
+
+standardsCDE3<-standardsCDE[standardsCDE$Plate=="3",]
+standardsCDE3$N_Source<-as.numeric((standardsCDE3$N_Source))
+standardsCDE3<-standardsCDE3[!standardsCDE3$N_Source=="500",]
+
+nm540CDE3<- ggplot(standardsCDE3, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Acinetobacter CDE3')
+nm540CDE3 
+
+```
+
+#Predicted L-AA
+##Assay AB
+Predicted L-Amino Acids concentrations of samples based on the standard curve.
+```{r}
+#Plates AB1 & AB2
+standardsAB1$Time <- as.factor(standardsAB1$Time)
+modelAB1<-lm(OD540~N_Source,data = standardsAB1)
+  modelAB1$coefficients   
+ summary(modelAB1)
+ 
+ standardsAB2$Time <- as.factor(standardsAB2$Time)
+modelAB2<-lm(OD540~N_Source,data = standardsAB2)
+  modelAB2$coefficients   
+ summary(modelAB2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_AB1<- ((samplesAB1$OD540-modelAB1$coefficients[1])/modelAB1$coefficients[2])*70
+samplesAB1$'Predicted_AA_Concentration'<-predictedAA_AB1
+
+predictedAA_AB2<- ((samplesAB2$OD540-modelAB2$coefficients[1])/modelAB2$coefficients[2])*70
+samplesAB2$'Predicted_AA_Concentration'<-predictedAA_AB2
+
+#Plates CDE1, CDE2, CDE3
+standardsCDE1$Time <- as.factor(standardsCDE1$Time)
+modelCDE1<-lm(OD540~N_Source,data = standardsCDE1)
+  modelCDE1$coefficients   
+ summary(modelCDE1)
+ 
+ standardsCDE2$Time <- as.factor(standardsCDE2$Time)
+modelCDE2<-lm(OD540~N_Source,data = standardsCDE2)
+  modelCDE2$coefficients   
+ summary(modelCDE2)
+ 
+ standardsCDE3$Time <- as.factor(standardsCDE3$Time)
+modelCDE3<-lm(OD540~N_Source,data = standardsCDE3)
+  modelCDE3$coefficients   
+ summary(modelCDE3)
+ 
+ #Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_CDE1<- ((samplesCDE1$OD540-modelCDE1$coefficients[1])/modelCDE1$coefficients[2])*70
+samplesCDE1$'Predicted_AA_Concentration'<-predictedAA_CDE1
+
+predictedAA_CDE2<- ((samplesCDE2$OD540-modelCDE2$coefficients[1])/modelCDE2$coefficients[2])*70
+samplesCDE2$'Predicted_AA_Concentration'<-predictedAA_CDE2
+
+predictedAA_CDE3<- ((samplesCDE3$OD540-modelCDE3$coefficients[1])/modelCDE3$coefficients[2])*70
+samplesCDE3$'Predicted_AA_Concentration'<-predictedAA_CDE3
+```
+
+#Combining technical replicates
+```{r}
+#AB
+combined_data_AB <- merge(samplesAB1[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       samplesAB2[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       by = c("Time", "Pair","Treatment", "miRNA"), 
+                       suffixes = c("_AB1", "_AB2"))
+
+#Changing negative values to zero
+combined_data_AB$Predicted_AA_Concentration_AB2[combined_data_AB$Predicted_AA_Concentration_AB2 < 0] <- 0
+
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_AB$Mean_Predicted_AA <- rowMeans(combined_data_AB[, c("Predicted_AA_Concentration_AB1", "Predicted_AA_Concentration_AB2")], na.rm = TRUE)
+
+#CDE
+# Merge the dataframes
+combined_data_CDE <- merge(
+  merge(
+    samplesCDE1[, c("Time", "Pair", "Treatment", "miRNA", "Predicted_AA_Concentration")],
+    samplesCDE2[, c("Time", "Pair", "Treatment", "miRNA", "Predicted_AA_Concentration")],
+    by = c("Time", "Pair", "Treatment", "miRNA"),
+    suffixes = c("_CDE1", "_CDE2"),
+    all = TRUE
+  ),
+  samplesCDE3[, c("Time", "Pair", "Treatment", "miRNA", "Predicted_AA_Concentration")],
+  by = c("Time", "Pair", "Treatment", "miRNA"),
+  suffixes = c("_CDE12", "_CDE3"),
+  all = TRUE
+)
+
+
+
+#Calculate the mean predicted AA concentration for each qualitative variablele
+combined_data_CDE <- combined_data_CDE %>%
+  mutate( Mean_Predicted_AA = rowMeans(
+    data.frame(Predicted_AA_Concentration_CDE1, 
+               Predicted_AA_Concentration_CDE2, 
+               Predicted_AA_Concentration),
+    na.rm = TRUE
+  ))
+
+
+```
+
+#Merging all replicas
+```{r}
+AAAcineto<- rbind(combined_data_AB[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")], 
+                   combined_data_CDE[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")])
+```
+
+
+##Paired Ttests for each timepoint
+```{r}
+AAAcineto_noctl<-AAAcineto[!AAAcineto$Treatment=='control',]
+
+AAAcineto_noctl$Treatment<-recode_factor(AAAcineto_noctl$Treatment, scramble= "Scramble miRNAs",plant="Plant miRNAs" )
+
+AAAcineto_noctl$Time<-as.factor(AAAcineto_noctl$Time)
+loop<-levels(AAAcineto_noctl$Time)
+
+AAAcineto_158b<-AAAcineto_noctl[AAAcineto_noctl$miRNA=='ath-mir158b',]
+AAAcineto_mixmiR5<-AAAcineto_noctl[AAAcineto_noctl$miRNA=='mix5miR',]
+AAAcineto_5642<-AAAcineto_noctl[AAAcineto_noctl$miRNA=='ath-miR5642b',]
+
+
+
+#mir158b
+for(i in 1:4) 
+{
+Timepoint<-AAAcineto_158b[AAAcineto_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Acineto_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AAAcineto_158b[AAAcineto_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Acineto_T_158b.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+#mixmir5
+for(i in 1:4) 
+{
+Timepoint<-AAAcineto_mixmiR5[AAAcineto_mixmiR5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Acineto_mixmiR5.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-AAAcineto_mixmiR5[AAAcineto_mixmiR5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Acineto_T_mixmiR5_less.txt"), append=T) 
+  }
+ i=i+1}
+
+#mir5642
+for(i in 1:4) 
+{
+Timepoint<-AAAcineto_5642[AAAcineto_5642$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Acineto_5642.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-AAAcineto_5642[AAAcineto_5642$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Acineto_T_5642_less.txt"), append=T) 
+  }
+ i=i+1}
+
+```
+
+##AA Consumption AUC
+```{r}
+# Calculate AUC using the trapz function
+# Define a custom AUC calculation function
+calculate_auc <- function(data, x_col, y_col) {
+  x <- data[[x_col]]  # Date column
+  y <- data[[y_col]]  # Data column
+  trapz(x, y)  # Calculate AUC using trapezoidal rule
+}
+
+#ath-miR158b
+AAAcineto_158b$Time <- as.numeric(AAAcineto_158b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AAAcineto_158b)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AAAcineto_158b<- AAAcineto_158b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#ath-miR5642b
+AAAcineto_5642$Time <- as.numeric(AAAcineto_5642$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AAAcineto_5642)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AAAcineto_5642<- AAAcineto_5642 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#ath-miRMix5
+AAAcineto_mixmiR5$Time <- as.numeric(AAAcineto_mixmiR5$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AAAcineto_mixmiR5)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AAAcineto_Mix5<- AAAcineto_mixmiR5 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+```
+
+
+#Growth of Acinetobacter
+##Importation
+```{r}
+GrowthData<- read.table(file.path("Raw_Data", "Acinetobacter","Acineto_Growth.txt"), header = TRUE, sep="\t") #160 obs. 6 var.
+GrowthData$Time<-as.factor(GrowthData$Time)
+GrowthData$Pair<-as.factor(GrowthData$Pair)
+```
+
+#Subsetting by miRNA
+```{r}
+Growth158b<-GrowthData[GrowthData$miRNA=="158b",]
+Growth5642b<-GrowthData[GrowthData$miRNA=="5642b",]
+GrowthMix5<-GrowthData[GrowthData$miRNA=="Mix5",]
+```
+
+
+#Statistical Tests
+```{r}
+loop<-levels(GrowthData$Time)
+#ath-miR158b
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158b[Growth158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Acineto_Assump_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158b[Growth158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Acineto_158b_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+#ath-miR5642b
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth5642b[Growth5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Acineto_Assump_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth5642b[Growth5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Acineto_5642b_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+
+#Mix 5
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-GrowthMix5[GrowthMix5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Acineto_Assump_Mix5.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-GrowthMix5[GrowthMix5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Acineto_Mix5_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+```
+
+##Growth AUC
+```{r}
+# Calculate AUC using the trapz function
+# Define a custom AUC calculation function
+calculate_auc <- function(data, x_col, y_col) {
+  x <- data[[x_col]]  # Date column
+  y <- data[[y_col]]  # Data column
+  trapz(x, y)  # Calculate AUC using trapezoidal rule
+}
+
+#ath-miR158b
+Growth158b$Time <- as.numeric(Growth158b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth158b)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_158b<- Growth158b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+
+#ath-miR5642b
+Growth5642b$Time <- as.numeric(Growth5642b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth5642b)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_5642b<- Growth5642b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#Mix5
+GrowthMix5$Time <- as.numeric(GrowthMix5$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(GrowthMix5)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_Mix5<- GrowthMix5 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+```
+
+
+#Merging Growth data and consumption data
+```{r}
+AAAcineto_158b$miRNA<-recode_factor(AAAcineto_158b$miRNA, 'ath-mir158b'="ath-miR158b")
+AAAcineto_mixmiR5$miRNA<-recode_factor(AAAcineto_mixmiR5$miRNA, mix5miR="Mix of 5")
+
+Growth158b$miRNA<-recode_factor(Growth158b$miRNA, '158b'="ath-miR158b")
+Growth158b$Treatment<-recode_factor(Growth158b$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+Growth5642b$miRNA<-recode_factor(Growth5642b$miRNA, '5642b'="ath-miR5642b")
+Growth5642b$Treatment<-recode_factor(Growth5642b$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+GrowthMix5$Treatment<-recode_factor(GrowthMix5$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+GrowthMix5$miRNA <- recode_factor(GrowthMix5$miRNA, Mix5="Mix of 5")
+
+# Define the desired column order
+columns <- c("Time", "miRNA", "Treatment", "Pair")
+
+#ath-miR158b
+# Reorder columns in both dataframes
+Growth158b <- Growth158b[, c(columns, setdiff(names(Growth158b), columns))]
+AAAcineto_158b <- AAAcineto_158b[, c(columns, setdiff(names(AAAcineto_158b),columns))]
+# Merge the dataframes
+All158b <- merge(Growth158b, AAAcineto_158b, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE) 
+
+
+#ath-miR5642b
+# Reorder columns in both dataframes
+Growth5642b <- Growth5642b[, c(columns, setdiff(names(Growth5642b), columns))]
+AAAcineto_5642 <- AAAcineto_5642[, c(columns, setdiff(names(AAAcineto_5642),columns))]
+# Merge the dataframes
+All5642b <- merge(Growth5642b, AAAcineto_5642, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE)
+
+# Mix of 5 
+# Reorder columns in both dataframes
+GrowthMix5 <- GrowthMix5[, c(columns, setdiff(names(GrowthMix5), columns))]
+AAAcineto_mixmiR5 <- AAAcineto_mixmiR5[, c(columns, setdiff(names(AAAcineto_mixmiR5),columns))]
+# Merge the dataframes
+AllMix5 <- merge(GrowthMix5, AAAcineto_mixmiR5, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE)
+
+```
+
+
+#Dual Y axis ath-miR158b
+```{r}
+coeff<- 40000
+boxAcineto158b<- ggplot(All158b) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatement", shape="")+
+ theme_pubr()+theme( axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+  legend.title = element_text(size=12),
+   legend.text = element_text(size=12)
+  )+ggtitle("Acinetobacter ath-miR158b")+theme(plot.title = element_text(hjust = 0.005, size=20))+ theme(legend.position = "none")   
+  grow_consume158b<-ggpar( boxAcineto158b,ylim = c(0.0, 0.5))
+  
+  grow_consume158b<-annotate_figure( grow_consume158b,
+           bottom = text_grob("Time (hours)", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consume158b
+```
+
+#Dual Y axis ath-miR5642b
+```{r}
+coeff<- 40000
+boxAcineto5642b<- ggplot(All5642b) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatement", shape="")+
+ theme_pubr()+theme( axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+  legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle("Acinetobacter ath-miR5642b")+theme(plot.title = element_text(hjust = 0.005, size=20))+ theme(legend.position = "none")   
+  grow_consume5642b<-ggpar( boxAcineto5642b,ylim = c(0.0, 0.45))
+    
+    grow_consume5642b<-annotate_figure( grow_consume5642b,
+           bottom = text_grob("Time (hours)", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+  grow_consume5642b
+```
+
+
+#Dual Y axis Mix of 5
+```{r}
+coeff3<- 42000
+
+# Create a new variable to group color and linetype together
+AllMix5$Treatment2 <- factor(AllMix5$Treatment, levels = c("Plant miRNAs", "Scramble miRNAs"))
+
+boxAcinetoMix5<- ggplot(AllMix5) +
+    # First plot for OD600: Line, Points, and Error bars with color and linetype based on Treatment2
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment2,group=Treatment2,linetype =Treatment2),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment2,group=Treatment2), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment2,group=Treatment2),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff3,group=Treatment2,linetype=Treatment2),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff3,group=Treatment2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff3,group=Treatment2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  
+  # Customize linetypes and colors for Treatment2
+  scale_linetype_manual(name = "Treatment", values = c("solid", "twodash")) +  # Solid for Plant miRNAs, dashed for Scramble miRNAs
+  scale_color_manual(name = "Treatment", values = c("darkslategray4", "lightcyan3")) +  # darkslategray4 for Plant miRNAs, lightcyan3 for Scramble miRNAs
+  
+  # Adjust y-axis and add a secondary axis
+  scale_y_continuous(name = "", sec.axis = sec_axis(~ . * coeff3, name = "")) +
+  
+  # Add labels and adjust legend
+  labs(x = "Time (hours)", color = "", fill = "", group = "", linetype = "Treatment", shape = "") +
+  
+  # Apply clean theme
+  theme_pubr() + 
+  theme(axis.text.y = element_text(color = "darkslategray4"),
+        axis.text.y.right = element_text(color = "black"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12)) +
+  ggtitle(expression(italic("Acinetobacter") ~ "mix of 5 miRNAs")) +
+  theme(plot.title = element_text(hjust = 0.005, size = 14)) + 
+  theme(legend.position = "bottom") + 
+  annotate("text", x = 4, y = 0.1, label = "*", size = 10) + 
+  
+  # Merge the color and linetype legends together
+  guides(color = guide_legend(order = 1), 
+         linetype = guide_legend(order = 1))
+
+# Adjust the plot appearance further
+grow_consumeMix5 <- ggpar(boxAcinetoMix5, ylim = c(0.0, 0.5))
+
+# Add annotations for axes
+    grow_consumeMix5_2<-annotate_figure(grow_consumeMix5,
+           bottom = text_grob("", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consumeMix5_2
+
+    ggsave(grow_consumeMix5_2, file=here("Output","Figures","Acineto_grow_consumeMix5.tiff"),width = 15, height = 15, units = "cm", compression='lzw')
+    
+    grow_consumeMix5_3<-grow_consumeMix5+theme(legend.position = "none")
+    saveRDS(grow_consumeMix5_3, file = here("Output","Figures","Acineto_grow_consumeMix5.rds"))
+``` 
+
+#Boxplot Mix of 5 miRs and Time 28
+```{r}
+AAAcineto_mixmiR5_28<-AAAcineto_mixmiR5[AAAcineto_mixmiR5$Time=='28',]
+AAAcineto_mixmiR5_28$Pair<-as.factor(AAAcineto_mixmiR5_28$Pair)
+boxMix5Acineto<-ggplot(AAAcineto_mixmiR5_28, aes(x=Treatment, y=Mean_Predicted_AA ,fill=Treatment, colour=Treatment)) +geom_boxplot(outlier.shape = NA, alpha=0.4) +
+  geom_point(pch = 21, position = position_jitterdodge(0.1))+
+ theme_light() + theme(legend.position = "none")+
+  scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))+geom_line(aes(group = Pair), color = "grey50", linetype = "solid", alpha = 0.5)+labs(y="L-amino acid concentration (μM)") 
+boxMix5Acineto
+```
+
+
+

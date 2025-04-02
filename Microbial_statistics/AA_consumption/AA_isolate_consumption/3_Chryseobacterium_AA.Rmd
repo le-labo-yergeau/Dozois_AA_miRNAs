@@ -1,0 +1,772 @@
+---
+title: "3_Chryseobacterium_AA"
+author: "Jessica A. Dozois"
+date: "2025-01-19"
+output: html_document
+---
+The data treated in this script is the AA consumption of Chryseobacterium. 
+
+
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix,gridExtra,pracma)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "t.test_results"), recursive=TRUE)
+```
+#Amino acid consumption
+##Importation
+```{r setup, include=FALSE}
+ReplicaAB<- read.table(file.path("Raw_Data", "Chryseobacterium","Chryseo_AB.txt"), header = TRUE, sep="\t") #156 obs. 8 var.
+ReplicaCE<- read.table(file.path("Raw_Data", "Chryseobacterium","Chryseo_CE.txt"), header = TRUE, sep="\t") #156 obs. 8 var.
+ReplicaD<-read.table(file.path("Raw_Data", "Chryseobacterium", "Chryseo_D.txt"), header = TRUE, sep="\t") #78 obs. 8 var.
+
+```
+
+
+##Standard curves for each Assay (540nm) 
+```{r}
+##ASSAY AB
+samplesAB<-ReplicaAB[!ReplicaAB$Treatment=="std",]
+samplesAB1<-samplesAB[samplesAB$Plate=="1",]
+samplesAB2<-samplesAB[samplesAB$Plate=="2",]
+
+#Standard curves plates AB
+standardsAB<- ReplicaAB[ReplicaAB$Treatment=="std",]
+
+standardsAB1<-standardsAB[standardsAB$Plate=="1",]
+standardsAB1$N_Source<-as.numeric((standardsAB1$N_Source))
+standardsAB1<-standardsAB1[!standardsAB1$N_Source=="500",]
+
+nm540AB1<- ggplot(standardsAB1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Chryseobacterium AB1')
+nm540AB1 
+
+
+standardsAB2<-standardsAB[standardsAB$Plate=="2",]
+standardsAB2$N_Source<-as.numeric((standardsAB2$N_Source))
+standardsAB2<-standardsAB2[!standardsAB2$N_Source=="500",]
+
+nm540AB2<- ggplot(standardsAB2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Chryseobacterium AB2')
+nm540AB2 
+
+
+##ASSAY D
+samplesD<-ReplicaD[!ReplicaD$Treatment=="std",]
+samplesD1<-samplesD[samplesD$Plate=="1",]
+samplesD2<-samplesD[samplesD$Plate=="2",]
+
+#Standard curves plates D
+standardsD<- ReplicaD[ReplicaD$Treatment=="std",]
+standardsD$N_Source<-as.numeric((standardsD$N_Source))
+standardsD<-standardsD[!standardsD$N_Source=="500",]
+
+nm540D<- ggplot(standardsD, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Chryseobacterium D')
+nm540D
+
+
+
+##ASSAY CE
+samplesCE<-ReplicaCE[!ReplicaCE$Treatment=="std",]
+samplesCE1<-samplesCE[samplesCE$Plate=="1",]
+samplesCE2<-samplesCE[samplesCE$Plate=="2",]
+
+#Standard curves plates CE
+standardsCE<- ReplicaCE[ReplicaCE$Treatment=="std",]
+
+standardsCE1<-standardsCE[standardsCE$Plate=="1",]
+standardsCE1$N_Source<-as.numeric((standardsCE1$N_Source))
+standardsCE1<-standardsCE1[!standardsCE1$N_Source=="500",]
+
+nm540CE1<- ggplot(standardsCE1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Chryseobacterium CE1')
+nm540CE1 
+
+
+standardsCE2<-standardsCE[standardsCE$Plate=="2",]
+standardsCE2$N_Source<-as.numeric((standardsCE2$N_Source))
+standardsCE2<-standardsCE2[!standardsCE2$N_Source=="500",]
+
+nm540CE2<- ggplot(standardsCE2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Chryseobacterium CE2')
+nm540CE2 
+
+```
+
+#Predicted L-AA Consumption
+##ASSAY AB
+Predicted L-Amino Acids concentrations of samples based on the standard curve.
+```{r}
+#Plates AB1 & AB2
+standardsAB1$Time <- as.factor(standardsAB1$Time)
+modelAB1<-lm(OD540~N_Source,data = standardsAB1)
+  modelAB1$coefficients   
+ summary(modelAB1)
+ 
+ standardsAB2$Time <- as.factor(standardsAB2$Time)
+modelAB2<-lm(OD540~N_Source,data = standardsAB2)
+  modelAB2$coefficients   
+ summary(modelAB2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_AB1<- ((samplesAB1$OD540-modelAB1$coefficients[1])/modelAB1$coefficients[2])*70
+samplesAB1$'Predicted_AA_Concentration'<-predictedAA_AB1
+
+predictedAA_AB2<- ((samplesAB2$OD540-modelAB2$coefficients[1])/modelAB2$coefficients[2])*70
+samplesAB2$'Predicted_AA_Concentration'<-predictedAA_AB2
+
+#Plates D1 & D2
+standardsD$Time <- as.factor(standardsD$Time)
+modelD<-lm(OD540~N_Source,data = standardsD)
+  modelD$coefficients   
+ summary(modelD)
+ 
+ #Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_D1<- ((samplesD1$OD540-modelD$coefficients[1])/modelD$coefficients[2])*70
+samplesD1$'Predicted_AA_Concentration'<-predictedAA_D1
+
+predictedAA_D2<- ((samplesD2$OD540-modelD$coefficients[1])/modelD$coefficients[2])*70
+samplesD2$'Predicted_AA_Concentration'<-predictedAA_D2
+
+#Plates CE1 & CE2
+standardsCE1$Time <- as.factor(standardsCE1$Time)
+modelCE1<-lm(OD540~N_Source,data = standardsCE1)
+  modelCE1$coefficients   
+ summary(modelCE1)
+ 
+ standardsCE2$Time <- as.factor(standardsCE2$Time)
+modelCE2<-lm(OD540~N_Source,data = standardsCE2)
+  modelCE2$coefficients   
+ summary(modelCE2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_CE1<- ((samplesCE1$OD540-modelCE1$coefficients[1])/modelCE1$coefficients[2])*70
+samplesCE1$'Predicted_AA_Concentration'<-predictedAA_CE1
+
+predictedAA_CE2<- ((samplesCE2$OD540-modelCE2$coefficients[1])/modelCE2$coefficients[2])*70
+samplesCE2$'Predicted_AA_Concentration'<-predictedAA_CE2
+
+```
+
+
+```{r}
+#Combining technical replicates
+#AB
+combined_data_AB <- merge(samplesAB1[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       samplesAB2[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       by = c("Time", "Pair","Treatment", "miRNA"), 
+                       suffixes = c("_AB1", "_AB2"))
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_AB$Mean_Predicted_AA <- rowMeans(combined_data_AB[, c("Predicted_AA_Concentration_AB1", "Predicted_AA_Concentration_AB2")], na.rm = TRUE)
+
+#D
+combined_data_D<-merge(samplesD1[, c("Treatment","Time","miRNA","Pair", "Predicted_AA_Concentration")], 
+                       samplesD2[, c("Treatment","Time","miRNA","Pair", "Predicted_AA_Concentration")], 
+                       by = c("Treatment","Time","miRNA","Pair"), 
+                       suffixes = c("_D1", "_D2"))
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_D$Mean_Predicted_AA <- rowMeans(combined_data_D[, c("Predicted_AA_Concentration_D1", "Predicted_AA_Concentration_D2")], na.rm = TRUE)
+
+#CE
+combined_data_CE <- merge(samplesCE1[, c("Treatment","Time","miRNA","Pair", "Predicted_AA_Concentration")], 
+                       samplesCE2[, c("Treatment","Time","miRNA","Pair", "Predicted_AA_Concentration")], 
+                       by = c("Treatment","Time","miRNA","Pair"), 
+                       suffixes = c("_CE1", "_CE2"))
+
+
+#Calculate the mean predicted AA concentration for each qualitative variCEle
+combined_data_CE$Mean_Predicted_AA <- rowMeans(combined_data_CE[, c("Predicted_AA_Concentration_CE1", "Predicted_AA_Concentration_CE2")], na.rm = TRUE)
+```
+
+##Merging all replicas
+```{r}
+AAChryseo <- rbind(combined_data_AB[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")], 
+                   combined_data_D[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")], 
+                   combined_data_CE[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")])
+
+```
+
+
+##Paired Ttests for each timepoint
+```{r}
+AAChryseo_noctl<-AAChryseo[!AAChryseo$Treatment=='control',]
+
+AAChryseo_noctl$Treatment<-recode_factor(AAChryseo_noctl$Treatment, scramble= "Scramble miRNAs",plant="Plant miRNAs" )
+
+AAChryseo_noctl$Time<-as.factor(AAChryseo_noctl$Time)
+loop<-levels(AAChryseo_noctl$Time)
+
+AAChryseo_158b<-AAChryseo_noctl[AAChryseo_noctl$miRNA=='ath-mir158b',]
+AAChryseo_mixmiR5<-AAChryseo_noctl[AAChryseo_noctl$miRNA=='mix5miR',]
+AAChryseo_827<-AAChryseo_noctl[AAChryseo_noctl$miRNA=='ath-miR827',]
+
+#mir158b
+for(i in 1:4) 
+{
+Timepoint<-AAChryseo_158b[AAChryseo_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Chryseo_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AAChryseo_158b[AAChryseo_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Chryseo_T_158b.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+
+#mir827
+for(i in 1:4) 
+{
+Timepoint<-AAChryseo_827[AAChryseo_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Chryseo_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AAChryseo_827[AAChryseo_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Chryseo_T_827.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+
+
+#mixmir5
+for(i in 1:4) 
+{
+Timepoint<-AAChryseo_mixmiR5[AAChryseo_mixmiR5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Chryseo_mixmiR5.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AAChryseo_mixmiR5[AAChryseo_mixmiR5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Chryseo_T_mixmiR5.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+
+
+```
+
+##AA Consumption AUC
+```{r}
+# Calculate AUC using the trapz function
+# Define a custom AUC calculation function
+calculate_auc <- function(data, x_col, y_col) {
+  x <- data[[x_col]]  # Date column
+  y <- data[[y_col]]  # Data column
+  trapz(x, y)  # Calculate AUC using trapezoidal rule
+}
+
+#ath-miR158b
+AAChryseo_158b$Time <- as.numeric(AAChryseo_158b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AAChryseo_158b)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AAChryseo_158b<- AAChryseo_158b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+
+#ath-miR827
+AAChryseo_827$Time <- as.numeric(AAChryseo_827$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AAChryseo_827)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AAChryseo_827<- AAChryseo_827 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#ath-miRMix5
+AAChryseo_mixmiR5$Time <- as.numeric(AAChryseo_mixmiR5$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AAChryseo_mixmiR5)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AAChryseo_Mix5<- AAChryseo_mixmiR5 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+```
+
+
+#Growth Chryseobacterium
+##Importation
+```{r}
+GrowthData<- read.table(file.path("Raw_Data", "Chryseobacterium","Chryseo_Growth.txt"), header = TRUE, sep="\t") #280 obs. 6 var.
+GrowthData$Time<-as.factor(GrowthData$Time)
+GrowthData$Pair<-as.factor(GrowthData$Pair)
+```
+
+##Subsetting by miRNA
+```{r}
+Growth158b<-GrowthData[GrowthData$miRNA=="ath-miR158b",]
+Growth827<-GrowthData[GrowthData$miRNA=="ath-miR827",]
+GrowthMix5<-GrowthData[GrowthData$miRNA=="Mix5",]
+```
+
+##Statistical Tests
+```{r}
+loop<-levels(GrowthData$Time)
+
+#ath-miR158b
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158b[Growth158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Chryseo_Assump_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158b[Growth158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Chryseo_158b_less_t.test.txt"), append=T) 
+  } 
+ i=i+1} #Time: 32   p.value : 0.043829  
+
+#ath-miR827
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth827[Growth827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Chryseo_Assump_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth827[Growth827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Chryseo_827_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+
+
+#ath-miRMix5
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-GrowthMix5[GrowthMix5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Chryseo_Assump_Mix5.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-GrowthMix5[GrowthMix5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.08)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Chryseo_Mix5_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+```
+
+##Growth AUC
+```{r}
+# Calculate AUC using the trapz function
+# Define a custom AUC calculation function
+calculate_auc <- function(data, x_col, y_col) {
+  x <- data[[x_col]]  # Date column
+  y <- data[[y_col]]  # Data column
+  trapz(x, y)  # Calculate AUC using trapezoidal rule
+}
+
+#ath-miR158b
+Growth158b$Time <- as.numeric(Growth158b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth158b)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_158b<- Growth158b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+
+#ath-miR827
+Growth827$Time <- as.numeric(Growth827$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth827)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_827<- Growth827 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#Mix5
+GrowthMix5$Treatment<-recode_factor(GrowthMix5$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+GrowthMix5$Time <- as.numeric(GrowthMix5$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(GrowthMix5)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_Mix5<- GrowthMix5 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+plant<- AUC_Growth_Mix5[AUC_Growth_Mix5$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$AUC_OD600
+scram<- AUC_Growth_Mix5[AUC_Growth_Mix5$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$AUC_OD600
+differences<- as.data.frame(mirscram - mirplant)
+identify_outliers(differences) #none
+shapiro_test(differences$`mirscram - mirplant`) #p-value= 0.7144164	
+t.test(AUC_OD600 ~ Treatment, paired=TRUE, data= AUC_Growth_Mix5, alternative='less')
+#p-value = 0.04424
+
+AUC_Growth_Mix5$Treatment<-recode_factor(AUC_Growth_Mix5$Treatment, Scramble= "Scramble miRNAs",Plant="Plant miRNAs" )
+boxAUC_AA_Mix5<-ggplot(AUC_Growth_Mix5, aes(y=AUC_OD600, x=Treatment, fill=Treatment))+
+   geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge(0.05))+
+  geom_line(aes(group = Pair), color = "grey50", linetype = "solid", alpha = 0.5) +
+  theme_classic() +theme(legend.position="none", axis.ticks.x=element_blank(), axis.text.x = element_text(size = 12, angle = 45, hjust = 1),axis.text.y = element_text(size = 10))+labs(x="", y="")+
+scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))+
+  ggtitle(expression(italic("Chryseobacterium") ~ "mix of 5 miRNAs"))+
+  annotate('text', x = 1.5, y = 1.2, label='*', size=8 )+
+  annotate('text', x = 1.5, y = 1.4, label='Growth', size=4.5)
+boxAUC_AA_Mix5
+boxAUC_AA_Mix5_2<-ggpar(boxAUC_AA_Mix5,ylim = c(0.4, 1.4))
+boxAUC_AA_Mix5_2
+
+saveRDS(boxAUC_AA_Mix5_2, file = here("Output","Figures","Chryseo_AUC_Growth.rds"))
+
+```
+
+
+#Merging Growth data and consumption data
+```{r}
+
+Growth158b$Treatment<-recode_factor(Growth158b$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+AAChryseo_158b$miRNA <- recode_factor(AAChryseo_158b$miRNA, 'ath-mir158b'="ath-miR158b")
+
+
+Growth827$Treatment<-recode_factor(Growth827$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+GrowthMix5$Treatment<-recode_factor(GrowthMix5$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+GrowthMix5$miRNA <- recode_factor(GrowthMix5$miRNA, Mix5="Mix of 5")
+AAChryseo_mixmiR5$miRNA<- recode_factor(AAChryseo_mixmiR5$miRNA, mix5miR="Mix of 5")
+
+# Define the desired column order
+columns <- c("Time", "miRNA", "Treatment", "Pair")
+
+
+#ath-miR158b
+# Reorder columns in both dataframes
+Growth158b <- Growth158b[, c(columns, setdiff(names(Growth158b), columns))]
+AAChryseo_158b <- AAChryseo_158b[, c(columns, setdiff(names(AAChryseo_158b),columns))]
+# Merge the dataframes
+All158b <- merge(Growth158b, AAChryseo_158b, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE) 
+
+# Reorder columns in both dataframes
+Growth827 <- Growth827[, c(columns, setdiff(names(Growth827), columns))]
+AAChryseo_827 <- AAChryseo_827[, c(columns, setdiff(names(AAChryseo_827),columns))]
+# Merge the dataframes
+All827 <- merge(Growth827, AAChryseo_827, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE) 
+
+# Mix of 5 
+# Reorder columns in both dataframes
+GrowthMix5 <- GrowthMix5[, c(columns, setdiff(names(GrowthMix5), columns))]
+AAChryseo_mixmiR5 <- AAChryseo_mixmiR5[, c(columns, setdiff(names(AAChryseo_mixmiR5),columns))]
+# Merge the dataframes
+AllMix5 <- merge(GrowthMix5, AAChryseo_mixmiR5, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE)
+
+```
+
+#Dual Y axis ath-miR158b
+```{r}
+coeff <- 40000
+
+# Create a new variable to group color and linetype together
+All158b$Treatment2 <- factor(All158b$Treatment, levels = c("Plant miRNAs", "Scramble miRNAs"))
+
+boxChryseo158b <- ggplot(All158b) +
+  # First plot for OD600: Line, Points, and Error bars with color and linetype based on Treatment2
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Adding data of AA consumption
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Customize linetypes and colors for Treatment2
+  scale_linetype_manual(name = "Treatment", values = c("solid", "twodash")) +  # Solid for Plant miRNAs, dashed for Scramble miRNAs
+  scale_color_manual(name = "Treatment", values = c("darkslategray4", "lightcyan3")) +  # darkslategray4 for Plant miRNAs, lightcyan3 for Scramble miRNAs
+  
+  # Adjust y-axis and add a secondary axis
+  scale_y_continuous(name = "", sec.axis = sec_axis(~ . * coeff, name = "")) +
+  
+  # Add labels and adjust legend
+  labs(x = "Time (hours)", color = "", fill = "", group = "", linetype = "Treatment", shape = "") +
+  
+  # Apply clean theme
+  theme_pubr() + 
+  theme(axis.text.y = element_text(color = "darkslategray4"),
+        axis.text.y.right = element_text(color = "black"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12)) +
+  ggtitle(expression(italic("Chryseobacterium") ~ "ath-miR158b")) +
+  theme(plot.title = element_text(hjust = 0.005, size = 14)) + 
+  theme(legend.position = "bottom") + 
+  annotate("text", x = 4, y = 0.32, label = "*", size = 10,color = "darkslategray4") + 
+  
+  # Merge the color and linetype legends together
+  guides(color = guide_legend(order = 1), 
+         linetype = guide_legend(order = 1))
+
+# Adjust the plot appearance further
+grow_consume158b <- ggpar(boxChryseo158b, ylim = c(0.0, 0.5))
+
+# Add annotations for axes
+grow_consume158b_2 <- annotate_figure(grow_consume158b,
+                                    bottom = text_grob("", size = 12),
+                                    left = text_grob("Optical density (600 nm)", size = 12, rot = 90, color = "darkslategray4"),
+                                    right = text_grob("L-amino acid concentration (μM)", size = 12, rot = 270))
+
+grow_consume158b_2
+
+
+
+ggsave(grow_consume158b_2, file=here("Output","Figures","Chryseo_grow_consume158b.tiff"),width = 15, height = 15, units = "cm", compression='lzw')
+grow_consume158b_3<-grow_consume158b+theme(legend.position = "none")
+saveRDS(grow_consume158b_3, file = here("Output","Figures","Chryseo_grow_consume158b.rds"))
+
+```
+
+
+#Dual Y axis ath-miR827
+```{r}
+coeff<- 40000
+boxChryseo827<- ggplot(All827) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatement", shape="")+
+ theme_pubr()+theme( axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+  legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle(expression(italic("Chryseobacterium")~"ath-miR827"))+theme(plot.title = element_text(hjust = 0.005, size=14))+ theme(legend.position = "none")   
+  grow_consume827<-ggpar( boxChryseo827,ylim = c(0.0, 0.4))
+  
+  grow_consume827<-annotate_figure( grow_consume827,
+           bottom = text_grob("Time (hours)", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consume827
+
+```
+
+
+#Dual Y axis Mix of 5
+```{r}
+coeff<- 28000
+boxChryseoMix5<- ggplot(AllMix5) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatement", shape="")+
+ theme_pubr()+theme( axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+  legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle(expression(italic("Chryseobacterium")~"mix of 5 miRNAs"))+theme(plot.title = element_text(hjust = 0.005, size=14))+ theme(legend.position = "none")   
+  grow_consumeMix5<-ggpar( boxChryseoMix5,ylim = c(0.0, 0.5))
+  
+  grow_consumeMix5<-annotate_figure( grow_consumeMix5,
+           bottom = text_grob("Time (hours)", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consumeMix5
+```

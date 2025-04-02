@@ -1,0 +1,87 @@
+---
+title: "5_Combined_Figures"
+author: "Jessica A. Dozois"
+date: "2025-03-04"
+output: html_document
+---
+#Loading librairies
+```{r}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,here,ggpubr)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output","Figures"))
+```
+
+#Importation
+```{r}
+Acineto_Mix5<-readRDS(file=here('Output','Figures','Acineto_grow_consumeMix5.rds'))
+Chryseo_158b<-readRDS(file=here('Output','Figures','Chryseo_grow_consume158b.rds'))
+Raoul_158a3p<-readRDS(file=here('Output','Figures','Raoul_grow_consume158a3p.rds'))
+Raoul_158b<-readRDS(file=here('Output','Figures','Raoul_grow_consume158b.rds'))
+Raoul_5642b<-readRDS(file=here('Output','Figures','Raoul_grow_consume5642b.rds'))
+Raoul_Mix5<-readRDS(file=here('Output','Figures','Raoul_grow_consumeMix5.rds'))
+
+AUC_Chryseo<-Chryseo<- readRDS(file=here('Output','Figures','Chryseo_AUC_Growth.rds'))
+AUC_Raoul<-readRDS(file=here('Output','Figures','Raoul_AUC_AA.rds'))
+
+
+```
+
+#Dual Y Axis Combination
+```{r}
+coeff<-40000
+coeff2<-33000
+coeff3<-42000
+coeff4<-37500
+
+# Combine the plots using ggarrange and add common x and y labels
+combined_plot <- ggarrange(
+  Acineto_Mix5, 
+  Chryseo_158b, 
+  Raoul_158a3p, 
+  Raoul_158b, 
+  Raoul_5642b, 
+  Raoul_Mix5, 
+  nrow = 2, 
+  ncol = 3, 
+  common.legend = TRUE, 
+  legend = "bottom"    # Place the legend at the bottom
+)
+
+# Add common x and y axis labels by passing the combined plot to annotate_figure
+combined_plot <- annotate_figure(combined_plot,
+                                    bottom = text_grob("", size = 14),
+                                    left = text_grob("Optical density (600 nm)", size = 15, rot = 90, color = "darkslategray4"),
+                                    right = text_grob("L-amino acid concentration (μM)", size = 15, rot = 270))
+
+
+# Display the final combined plot
+combined_plot
+ggsave(combined_plot, file=here("Output","Figures","Combine_DualY.tiff"),width = 35, height = 20, units = "cm", compression='lzw')
+
+
+```
+
+#Area under the curve combination
+```{r}
+# Combine the plots using ggarrange and add common x and y labels
+combined_plot_AUC <- ggarrange(AUC_Chryseo, AUC_Raoul,
+  nrow = 1, 
+  ncol = 2, 
+  widths=c(0.25,0.75)
+)
+combined_plot_AUC<- annotate_figure(combined_plot_AUC,
+                                    left = text_grob("Area Under the Curve", size = 15, rot = 90))
+```
+
+#Combine DualY and AUC
+```{r}
+DualY_AUC<- ggarrange(combined_plot,combined_plot_AUC, labels = c("A","B"), nrow=2, ncol=1, heights=c(0.6,0.4),font.label=list(color="black",size=20))
+DualY_AUC
+ggsave(DualY_AUC, file=here("Output","Figures","DualY_AUC.tiff"),width = 36, height = 36, units = "cm", compression='lzw')
+saveRDS(DualY_AUC, file = here("Output","Figures","Isolates_AUC_Growth.rds"))
+```
+

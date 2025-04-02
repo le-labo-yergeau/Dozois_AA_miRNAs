@@ -1,0 +1,1502 @@
+---
+title: "4_Raoultella_AA"
+author: "Jessica A. Dozois"
+date: "2025-02-24"
+output: html_document
+---
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix,gridExtra,pracma)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "t.test_results", "Growth_curves"), recursive=TRUE)
+```
+
+#AA Consumption
+##Importation
+```{r}
+All_Raoul_AA<- read.table(file.path("Raw_Data", "Raoultella","Raoul_AA.txt"), header = TRUE, sep="\t") #700 obs. 8 var.
+```
+
+##Standard curves for each Assay (540nm) 
+
+```{r}
+##ASSAY A
+Assay_A<-All_Raoul_AA[All_Raoul_AA$Pair=="A",]
+samples_A<-Assay_A[!Assay_A$Treatment=="std",]
+samples_A1<-samples_A[! is.na(samples_A$Plate) & samples_A$Plate=="1",]
+samples_A2<-samples_A[! is.na(samples_A$Plate) & samples_A$Plate=="2",]
+
+
+#Standard curves plates A
+standards_A <- Assay_A[!is.na(Assay_A$Treatment) & Assay_A$Treatment == "std", ]
+
+standards_A1<-standards_A[standards_A$Plate=="1",]
+standards_A1$N_Source<-as.numeric((standards_A1$N_Source))
+nm540_A1<- ggplot(standards_A1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_A1')
+nm540_A1 
+
+
+standards_A2<-standards_A[standards_A$Plate=="2",]
+standards_A2$N_Source<-as.numeric((standards_A2$N_Source))
+nm540_A2<- ggplot(standards_A2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_A2')
+nm540_A2
+
+##Predicted L-AA
+#Predicted L-Amino Acids concentrations of samples based on the standard curve.
+standards_A1$Time <- as.factor(standards_A1$Time)
+model_A1<-lm(OD540~N_Source,data = standards_A1)
+  model_A1$coefficients   
+ summary(model_A1)
+ 
+ standards_A2$Time <- as.factor(standards_A2$Time)
+model_A2<-lm(OD540~N_Source,data = standards_A2)
+  model_A2$coefficients   
+ summary(model_A2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_A1<- ((samples_A1$OD540-model_A1$coefficients[1])/model_A1$coefficients[2])*70
+samples_A1$'Predicted_AA_Concentration'<-predictedAA_A1
+
+predictedAA_A2<- ((samples_A2$OD540-model_A2$coefficients[1])/model_A2$coefficients[2])*70
+samples_A2$'Predicted_AA_Concentration'<-predictedAA_A2
+
+#Combining technical replicates
+combined_data_A <- merge(samples_A1[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       samples_A2[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       by = c("Time", "Pair","Treatment", "miRNA"), 
+                       suffixes = c("_A1", "_A2"))
+
+ # This an outlier that has been replaced by its technical replicate value
+tolerance <- 1e-3
+combined_data_A$Predicted_AA_Concentration_A2[abs(combined_data_A$Predicted_AA_Concentration_A2 - 32051.809) < tolerance] <- 8986.012
+
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_A$Mean_Predicted_AA <- rowMeans(combined_data_A[, c("Predicted_AA_Concentration_A1", "Predicted_AA_Concentration_A2")], na.rm = TRUE)
+
+```
+
+
+
+
+```{r}
+##ASSAY B
+Assay_B<-All_Raoul_AA[All_Raoul_AA$Pair=="B",]
+samples_B<-Assay_B[!Assay_B$Treatment=="std",]
+samples_B1<-samples_B[! is.na(samples_B$Plate) & samples_B$Plate=="1",]
+samples_B2<-samples_B[! is.na(samples_B$Plate) & samples_B$Plate=="2",]
+
+
+#Standard curves plates B
+standards_B <- Assay_B[!is.na(Assay_B$Treatment) & Assay_B$Treatment == "std", ]
+
+standards_B1<-standards_B[standards_B$Plate=="1",]
+standards_B1$N_Source<-as.numeric((standards_B1$N_Source))
+nm540_B1<- ggplot(standards_B1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_B1')
+nm540_B1 
+
+
+standards_B2<-standards_B[standards_B$Plate=="2",]
+standards_B2$N_Source<-as.numeric((standards_B2$N_Source))
+nm540_B2<- ggplot(standards_B2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_B2')
+nm540_B2
+
+##Predicted L-AA
+#Predicted L-Amino Acids concentrations of samples based on the standard curve.
+standards_B1$Time <- as.factor(standards_B1$Time)
+model_B1<-lm(OD540~N_Source,data = standards_B1)
+  model_B1$coefficients   
+ summary(model_B1)
+ 
+ standards_B2$Time <- as.factor(standards_B2$Time)
+model_B2<-lm(OD540~N_Source,data = standards_B2)
+  model_B2$coefficients   
+ summary(model_B2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_B1<- ((samples_B1$OD540-model_B1$coefficients[1])/model_B1$coefficients[2])*70
+samples_B1$'Predicted_AA_Concentration'<-predictedAA_B1
+
+predictedAA_B2<- ((samples_B2$OD540-model_B2$coefficients[1])/model_B2$coefficients[2])*70
+samples_B2$'Predicted_AA_Concentration'<-predictedAA_B2
+
+#Combining technical replicates
+combined_data_B <- merge(samples_B1[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       samples_B2[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       by = c("Time", "Pair","Treatment", "miRNA"), 
+                       suffixes = c("_B1", "_B2"))
+
+
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_B$Mean_Predicted_AA <- rowMeans(combined_data_B[, c("Predicted_AA_Concentration_B1", "Predicted_AA_Concentration_B2")], na.rm = TRUE)
+
+```
+
+```{r}
+##ASSAY C
+Assay_C<-All_Raoul_AA[All_Raoul_AA$Pair=="C",]
+samples_C<-Assay_C[!Assay_C$Treatment=="std",]
+samples_C1<-samples_C[! is.na(samples_C$Plate) & samples_C$Plate=="1",]
+samples_C2<-samples_C[! is.na(samples_C$Plate) & samples_C$Plate=="2",]
+
+
+#Standard curves plates C
+standards_C <- Assay_C[!is.na(Assay_C$Treatment) & Assay_C$Treatment == "std", ]
+
+standards_C1<-standards_C[standards_C$Plate=="1",]
+standards_C1$N_Source<-as.numeric((standards_C1$N_Source))
+nm540_C1<- ggplot(standards_C1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_C1')
+nm540_C1 
+
+
+standards_C2<-standards_C[standards_C$Plate=="2",]
+standards_C2$N_Source<-as.numeric((standards_C2$N_Source))
+nm540_C2<- ggplot(standards_C2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_C2')
+nm540_C2
+
+##Predicted L-AA
+#Predicted L-Amino Acids concentrations of samples based on the standard curve.
+standards_C1$Time <- as.factor(standards_C1$Time)
+model_C1<-lm(OD540~N_Source,data = standards_C1)
+  model_C1$coefficients   
+ summary(model_C1)
+ 
+ standards_C2$Time <- as.factor(standards_C2$Time)
+model_C2<-lm(OD540~N_Source,data = standards_C2)
+  model_C2$coefficients   
+ summary(model_C2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_C1<- ((samples_C1$OD540-model_C1$coefficients[1])/model_C1$coefficients[2])*70
+samples_C1$'Predicted_AA_Concentration'<-predictedAA_C1
+
+predictedAA_C2<- ((samples_C2$OD540-model_C2$coefficients[1])/model_C2$coefficients[2])*70
+samples_C2$'Predicted_AA_Concentration'<-predictedAA_C2
+
+#Combining technical replicates
+combined_data_C <- merge(samples_C1[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       samples_C2[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Concentration")], 
+                       by = c("Time", "Pair","Treatment", "miRNA"), 
+                       suffixes = c("_C1", "_C2"))
+
+
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_C$Mean_Predicted_AA <- rowMeans(combined_data_C[, c("Predicted_AA_Concentration_C1", "Predicted_AA_Concentration_C2")], na.rm = TRUE)
+
+```
+
+```{r}
+##ASSAY D
+Assay_D<-All_Raoul_AA[All_Raoul_AA$Pair=="D",]
+samples_D<-Assay_D[!Assay_D$Treatment=="std",]
+samples_D1<-samples_D[! is.na(samples_D$Plate) & samples_D$Plate=="1",]
+samples_D2<-samples_D[! is.na(samples_D$Plate) & samples_D$Plate=="2",]
+
+
+#Standard curves plates D
+standards_D <- Assay_D[!is.na(Assay_D$Treatment) & Assay_D$Treatment == "std", ]
+
+standards_D1<-standards_D[standards_D$Plate=="1",]
+standards_D1$N_Source<-as.numeric((standards_D1$N_Source))
+nm540_D1<- ggplot(standards_D1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_D1')
+nm540_D1 
+
+
+standards_D2<-standards_D[standards_D$Plate=="2",]
+standards_D2$N_Source<-as.numeric((standards_D2$N_Source))
+nm540_D2<- ggplot(standards_D2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_D2')
+nm540_D2
+
+##Predicted L-AA
+#Predicted L-Amino Acids concentrations of samples based on the standard curve.
+standards_D1$Time <- as.factor(standards_D1$Time)
+model_D1<-lm(OD540~N_Source,data = standards_D1)
+  model_D1$coefficients   
+ summary(model_D1)
+ 
+ standards_D2$Time <- as.factor(standards_D2$Time)
+model_D2<-lm(OD540~N_Source,data = standards_D2)
+  model_D2$coefficients   
+ summary(model_D2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_D1<- ((samples_D1$OD540-model_D1$coefficients[1])/model_D1$coefficients[2])*70
+samples_D1$'Predicted_AA_Doncentration'<-predictedAA_D1
+
+predictedAA_D2<- ((samples_D2$OD540-model_D2$coefficients[1])/model_D2$coefficients[2])*70
+samples_D2$'Predicted_AA_Doncentration'<-predictedAA_D2
+
+#Combining technical replicates
+combined_data_D <- merge(samples_D1[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Doncentration")], 
+                       samples_D2[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Doncentration")], 
+                       by = c("Time", "Pair","Treatment", "miRNA"), 
+                       suffixes = c("_D1", "_D2"))
+
+
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_D$Mean_Predicted_AA <- rowMeans(combined_data_D[, c("Predicted_AA_Doncentration_D1", "Predicted_AA_Doncentration_D2")], na.rm = TRUE)
+```
+
+```{r}
+##ASSAY E
+Assay_E<-All_Raoul_AA[All_Raoul_AA$Pair=="E",]
+samples_E<-Assay_E[!Assay_E$Treatment=="std",]
+samples_E1<-samples_E[! is.na(samples_E$Plate) & samples_E$Plate=="1",]
+samples_E2<-samples_E[! is.na(samples_E$Plate) & samples_E$Plate=="2",]
+
+
+#Standard curves plates E
+standards_E <- Assay_E[!is.na(Assay_E$Treatment) & Assay_E$Treatment == "std", ]
+
+standards_E1<-standards_E[standards_E$Plate=="1",]
+standards_E1$N_Source<-as.numeric((standards_E1$N_Source))
+nm540_E1<- ggplot(standards_E1, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_E1')
+nm540_E1 
+
+
+standards_E2<-standards_E[standards_E$Plate=="2",]
+standards_E2$N_Source<-as.numeric((standards_E2$N_Source))
+nm540_E2<- ggplot(standards_E2, aes(x=N_Source, y=OD540))+
+  labs( y="Optical Density (540nm)", x="Concentration of L-AAs (uM)")+
+  geom_point()+stat_cor(label.y=0.75, r.accuracy = 0.0001)+
+  stat_regline_equation(label.y= 0.7)+
+ geom_smooth(method = "lm", alpha=.15, colour='purple') +
+  theme_bw()+
+  ggtitle('Raoultella_E2')
+nm540_E2
+
+##Predicted L-AA
+#Predicted L-Amino Acids concentrations of samples based on the standard curve.
+standards_E1$Time <- as.factor(standards_E1$Time)
+model_E1<-lm(OD540~N_Source,data = standards_E1)
+  model_E1$coefficients   
+ summary(model_E1)
+ 
+ standards_E2$Time <- as.factor(standards_E2$Time)
+model_E2<-lm(OD540~N_Source,data = standards_E2)
+  model_E2$coefficients   
+ summary(model_E2)
+ 
+#Calculating the concentration of L-AA (uM) that corresponds to measured optical densities
+predictedAA_E1<- ((samples_E1$OD540-model_E1$coefficients[1])/model_E1$coefficients[2])*70
+samples_E1$'Predicted_AA_Eoncentration'<-predictedAA_E1
+
+predictedAA_E2<- ((samples_E2$OD540-model_E2$coefficients[1])/model_E2$coefficients[2])*70
+samples_E2$'Predicted_AA_Eoncentration'<-predictedAA_E2
+
+#Combining technical replicates
+combined_data_E <- merge(samples_E1[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Eoncentration")], 
+                       samples_E2[, c("Time", "Pair","Treatment", "miRNA", "Predicted_AA_Eoncentration")], 
+                       by = c("Time", "Pair","Treatment", "miRNA"), 
+                       suffixes = c("_E1", "_E2"))
+
+
+#Calculate the mean predicted AA concentration for each qualitative variable
+combined_data_E$Mean_Predicted_AA <- rowMeans(combined_data_E[, c("Predicted_AA_Eoncentration_E1", "Predicted_AA_Eoncentration_E2")], na.rm = TRUE)
+```
+
+##Merging all replicas
+```{r}
+AARaoul<- rbind(combined_data_A[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")], 
+                   combined_data_B[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")],
+                  combined_data_C[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")],
+                  combined_data_D[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")],
+                 combined_data_E[, c("Treatment", "Time", "miRNA", "Pair", "Mean_Predicted_AA")])
+```
+
+##Statistical Tests
+```{r}
+AARaoul_noctl<-AARaoul
+
+AARaoul_noctl$Treatment<-recode_factor(AARaoul_noctl$Treatment, Scramble= "Scramble miRNAs",Plant="Plant miRNAs" )
+
+AARaoul_noctl$Time<-as.factor(AARaoul_noctl$Time)
+loop<-levels(AARaoul_noctl$Time)
+
+AARaoul_158a3p<-AARaoul_noctl[AARaoul_noctl$miRNA=='ath-miR158a3p',]
+AARaoul_158b<-AARaoul_noctl[AARaoul_noctl$miRNA=='ath-miR158b',]
+AARaoul_159<-AARaoul_noctl[AARaoul_noctl$miRNA=='ath-miR159',]
+AARaoul_827<-AARaoul_noctl[AARaoul_noctl$miRNA=='ath-miR827',]
+AARaoul_5642b<-AARaoul_noctl[AARaoul_noctl$miRNA=='ath-miR5642b',]
+AARaoul_mixmiR5<-AARaoul_noctl[AARaoul_noctl$miRNA=='Mix5',]
+
+#mir158a3p
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_158a3p[AARaoul_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Raoul_158a3p.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_158a3p[AARaoul_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Raoul_T_158a3p_less.txt"), append=T) 
+  }
+ i=i+1} # Time 24, Time 6 = 0.06916512 
+
+
+#mir158b
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_158b[AARaoul_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Raoul_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_158b[AARaoul_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Raoul_T_158b_greater.txt"), append=T) 
+  } 
+ i=i+1} # Time 0, Time 3 = 0.08338839  
+
+
+#mir159
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_159[AARaoul_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Raoul_159.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_159[AARaoul_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Raoul_T_159r.txt"), append=T) 
+  } 
+ i=i+1} #ns
+
+#mir827
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_827[AARaoul_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Raoul_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_827[AARaoul_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Raoul_T_827.txt"), append=T) 
+  } 
+ i=i+1} # ns
+
+
+
+#mir5642b
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_5642b[AARaoul_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Raoul_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_5642b[AARaoul_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Raoul_T_5642b_greater.txt"), append=T) 
+  } 
+ i=i+1} #Time 3
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_5642b[AARaoul_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Raoul_T_5642b_less.txt"), append=T) 
+  }
+ i=i+1} #Time 0 
+
+
+
+#mixmir5
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_mixmiR5[AARaoul_mixmiR5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Assump_AA_Raoul_mixmiR5.txt"), append=T) 
+  } 
+ i=i+1}
+
+for(i in 1:4) 
+{
+Timepoint<-AARaoul_mixmiR5[AARaoul_mixmiR5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$Mean_Predicted_AA
+scram<- Timepoint[Timepoint$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$Mean_Predicted_AA
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Raoul_T_mixmiR5_greater.txt"), append=T) 
+  } 
+ i=i+1} #Time 24
+
+
+```
+
+##AA Consumption AUC
+```{r}
+# Calculate AUC using the trapz function
+# Define a custom AUC calculation function
+calculate_auc <- function(data, x_col, y_col) {
+  x <- data[[x_col]]  # Date column
+  y <- data[[y_col]]  # Data column
+  trapz(x, y)  # Calculate AUC using trapezoidal rule
+}
+
+#ath-miR158a3p
+AARaoul_158a3p$Time <- as.numeric(AARaoul_158a3p$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AARaoul_158a3p)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AARaoul_158a3p<- AARaoul_158a3p %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+plant<- AUC_AARaoul_158a3p[AUC_AARaoul_158a3p$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$AUC_Mean_Predicted_AA
+scram<- AUC_AARaoul_158a3p[AUC_AARaoul_158a3p$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$AUC_Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+identify_outliers(differences) #none
+shapiro_test(differences$`mirscram - mirplant`) #p-value= 0.7144164	
+t.test(AUC_Mean_Predicted_AA ~ Treatment, paired=TRUE, data= AUC_AARaoul_158a3p, alternative='greater') #p-value = 0.01693
+
+boxAUC_AA_158a3p<-ggplot(AUC_AARaoul_158a3p, aes(y=AUC_Mean_Predicted_AA, x=Treatment, fill=Treatment))+
+   geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge(0.2))+
+  geom_line(aes(group = Pair), color = "grey50", linetype = "solid", alpha = 0.5) +
+  theme_classic() + theme(legend.position="none", axis.ticks.x=element_blank(), axis.text.x = element_text(size = 12, angle = 45, hjust = 1),axis.text.y = element_text(size = 10)) +labs(x="", y="")+
+scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))+
+  ggtitle(expression(italic("Raoultella") ~ "ath-miR158a3p"))+
+  annotate('text', x = 1.5, y = 32000, label='*', size=8)+
+  annotate('text', x = 1.5, y = 35000, label='Amino acids', size=4.5)
+boxAUC_AA_158a3p_2<-ggpar(boxAUC_AA_158a3p,ylim = c(15000, 35000))
+boxAUC_AA_158a3p_2
+
+#ath-miR158b
+AARaoul_158b$Time <- as.numeric(AARaoul_158b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AARaoul_158b)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AARaoul_158b<- AARaoul_158b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+plant<- AUC_AARaoul_158b[AUC_AARaoul_158b$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$AUC_Mean_Predicted_AA
+scram<- AUC_AARaoul_158b[AUC_AARaoul_158b$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$AUC_Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+identify_outliers(differences) #none
+shapiro_test(differences$`mirscram - mirplant`) #p-value= 0.01586739	
+wilcox.test(AUC_Mean_Predicted_AA ~ Treatment, paired=TRUE, data= AUC_AARaoul_158b, alternative='less')
+#p-value = 0.03125
+
+boxAUC_AA_158b<-ggplot(AUC_AARaoul_158b, aes(y=AUC_Mean_Predicted_AA, x=Treatment, fill=Treatment))+
+   geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge(0.2))+
+  geom_line(aes(group = Pair), color = "grey50", linetype = "solid", alpha = 0.5) +
+  theme_classic() + theme(legend.position="none", axis.ticks.x=element_blank(), axis.text.x = element_text(size = 12, angle = 45, hjust = 1),axis.text.y = element_text(size = 10))+labs(x="", y="")+
+scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))+
+  ggtitle(expression(italic("Raoultella") ~ "ath-miR158b"))+
+  annotate('text', x = 1.5, y = 32000, label='*', size=8)+
+  annotate('text', x = 1.5, y = 35000, label='Amino acids', size=4.5)
+boxAUC_AA_158b
+boxAUC_AA_158b_2<-ggpar(boxAUC_AA_158b,ylim = c(15000, 35000))
+boxAUC_AA_158b_2
+
+#ath-miR159
+AARaoul_159$Time <- as.numeric(AARaoul_159$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AARaoul_159)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AARaoul_159<- AARaoul_159 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#ath-miR827
+AARaoul_827$Time <- as.numeric(AARaoul_827$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AARaoul_827)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AARaoul_827<- AARaoul_827 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+#ath-miR5642b
+AARaoul_5642b$Time <- as.numeric(AARaoul_5642b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AARaoul_5642b)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AARaoul_5642b<- AARaoul_5642b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+t.test(AUC_Mean_Predicted_AA ~ Treatment, paired=TRUE, data= AUC_AARaoul_5642b, alternative='greater') #p-value = 0.02862
+
+boxAUC_AA_5642b<-ggplot(AUC_AARaoul_5642b, aes(y=AUC_Mean_Predicted_AA, x=Treatment,fill=Treatment))+
+   geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge(0.2))+
+  geom_line(aes(group = Pair), color = "grey50", linetype = "solid", alpha = 0.5) +
+  theme_classic()+
+  theme(legend.position="none", axis.ticks.x=element_blank(), axis.text.x = element_text(size = 12, angle = 45, hjust = 1),axis.text.y = element_text(size = 10))+
+  labs(x="", y="")+
+scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))+
+ ggtitle(expression(italic("Raoultella") ~ "ath-miR5642b"))+
+  annotate('text', x = 1.5, y = 32000, label='*', size=8)+
+  annotate('text', x = 1.5, y = 35000, label='Amino acids', size=4.5)
+boxAUC_AA_5642b
+boxAUC_AA_5642b_2<-ggpar(boxAUC_AA_5642b,ylim = c(15000, 35000))
+boxAUC_AA_5642b_2
+
+
+#ath-miRMix5
+AARaoul_mixmiR5$Time <- as.numeric(AARaoul_mixmiR5$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(AARaoul_mixmiR5)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_AARaoul_Mix5<- AARaoul_mixmiR5 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+plant<- AUC_AARaoul_Mix5[AUC_AARaoul_Mix5$Treatment=="Plant miRNAs",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$AUC_Mean_Predicted_AA
+scram<- AUC_AARaoul_Mix5[AUC_AARaoul_Mix5$Treatment=="Scramble miRNAs",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$AUC_Mean_Predicted_AA
+differences<- as.data.frame(mirscram - mirplant)
+identify_outliers(differences) #none
+shapiro_test(differences$`mirscram - mirplant`) #p-value= 0.4177331	
+t.test(AUC_Mean_Predicted_AA ~ Treatment, paired=TRUE, data= AUC_AARaoul_Mix5, alternative='less')
+#p-value = 0.07461
+
+Raoul_combiAA<-ggarrange(boxAUC_AA_158a3p_2,boxAUC_AA_158b_2,boxAUC_AA_5642b_2, nrow=1, ncol=3)
+saveRDS(Raoul_combiAA, file = here("Output","Figures","Raoul_AUC_AA.rds"))
+
+```
+
+
+#Growth Raoultella
+##Importation
+```{r}
+GrowthData<- read.table(file.path("Raw_Data", "Raoultella","Raoul_Growth.txt"), header = TRUE, sep="\t") #280 obs. 6 var.
+GrowthData$Time<-as.factor(GrowthData$Time)
+GrowthData$Pair<-as.factor(GrowthData$Pair)
+```
+
+##Subsetting by miRNA
+```{r}
+Growth158a3p<-GrowthData[GrowthData$miRNA=="ath-miR158a3p",]
+Growth158b<-GrowthData[GrowthData$miRNA=="ath-miR158b",]
+Growth159<-GrowthData[GrowthData$miRNA=="ath-miR159",]
+Growth827<-GrowthData[GrowthData$miRNA=="ath-miR827",]
+Growth5642b<-GrowthData[GrowthData$miRNA=="ath-miR5642b",]
+GrowthMix5<-GrowthData[GrowthData$miRNA=="Mix5",]
+```
+
+##Statistical Tests
+```{r}
+loop<-levels(GrowthData$Time)
+#ath-miR158a3p
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158a3p[Growth158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Raoul_Assump_158a3p.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158a3p[Growth158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Raoul_158a3p_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+#ath-miR158b
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158b[Growth158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Raoul_Assump_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth158b[Growth158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Raoul_158b_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+#ath-miR159
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth159[Growth159$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Raoul_Assump_159.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth159[Growth159$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Raoul_159_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+#ath-miR827
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth827[Growth827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Raoul_Assump_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth827[Growth827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Raoul_827_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+
+#ath-miR5642b
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth5642b[Growth5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Raoul_Assump_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-Growth5642b[Growth5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Raoul_5642b_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #Time 3
+
+#ath-miRMix5
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-GrowthMix5[GrowthMix5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","t.test_results","Growth_curves","Raoul_Assump_Mix5.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:4) 
+{
+Timepoint<-GrowthMix5[GrowthMix5$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Pair),]
+mirplant<-planto$OD600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Pair),]
+mirscram<-scramo$OD600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "two.sided")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","t.test_results","Growth_curves","Raoul_Mix5_t.test.txt"), append=T) 
+  } 
+ i=i+1} #nothing significant
+```
+
+
+#Growth AUC
+```{r}
+#ath-miR158a3p
+Growth158a3p$Time <- as.numeric(Growth158a3p$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth158a3p)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_158a3p<- Growth158a3p %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#ath-miR158b
+Growth158b$Time <- as.numeric(Growth158b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth158b)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_158b<- Growth158b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+
+#ath-miR159
+Growth159$Time <- as.numeric(Growth159$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth159)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_159<- Growth159 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+
+#ath-miR827
+Growth827$Time <- as.numeric(Growth827$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth827)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_827<- Growth827 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+t.test(AUC_OD600 ~ Treatment, paired=TRUE, data= AUC_Growth_827, alternative='greater')#p-value = 0.05027
+
+boxAUC_AA_827<-ggplot(AUC_Growth_827, aes(y=AUC_OD600, x=Treatment, fill=Treatment))+
+   geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge(0.05))+
+  geom_line(aes(group = Pair), color = "grey50", linetype = "solid", alpha = 0.5) +
+  theme_classic() +theme(axis.text.x=element_blank())+labs(x="", y="Area under the curve for \n optical density (600 nm)")+
+scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))+
+  ggtitle(expression(italic("Raoultella") ~ "ath-miR827"))+
+  annotate('text', x = 1.5, y = 1.1, label='p = 0.05027', size=4)
+boxAUC_AA_827
+boxAUC_AA_827_2<-ggpar(boxAUC_AA_827,ylim = c(0.6, 1.2))
+boxAUC_AA_827_2
+
+
+
+#ath-miR5642b
+Growth5642b$Time <- as.numeric(Growth5642b$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(Growth5642b)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_5642b<- Growth5642b %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+#Mix5
+GrowthMix5$Time <- as.numeric(GrowthMix5$Time) 
+# Select columns with data for AUC calculation
+data_cols <- names(GrowthMix5)[6]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Growth_Mix5<- GrowthMix5 %>%
+  group_by(Pair, Treatment) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+```
+
+
+#Merging Growth data and consumption data
+```{r}
+
+Growth158a3p$Treatment<-recode_factor(Growth158a3p$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+Growth158b$Treatment<-recode_factor(Growth158b$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+Growth159$Treatment<-recode_factor(Growth159$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+Growth827$Treatment<-recode_factor(Growth827$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+Growth5642b$Treatment<-recode_factor(Growth5642b$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+
+GrowthMix5$Treatment<-recode_factor(GrowthMix5$Treatment, Plant="Plant miRNAs", Scramble= "Scramble miRNAs")
+GrowthMix5$miRNA <- recode_factor(GrowthMix5$miRNA, Mix5="Mix of 5")
+AARaoul_mixmiR5$miRNA<- recode_factor(AARaoul_mixmiR5$miRNA, Mix5="Mix of 5")
+
+# Define the desired column order
+columns <- c("Time", "miRNA", "Treatment", "Pair")
+
+#ath-miR158a-3p
+# Reorder columns in both dataframes
+Growth158a3p <- Growth158a3p[, c(columns, setdiff(names(Growth158a3p), columns))]
+AARaoul_158a3p <- AARaoul_158a3p[, c(columns, setdiff(names(AARaoul_158a3p),columns))]
+# Merge the dataframes
+All158a3p <- merge(Growth158a3p, AARaoul_158a3p, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE) 
+
+#ath-miR158b
+# Reorder columns in both dataframes
+Growth158b <- Growth158b[, c(columns, setdiff(names(Growth158b), columns))]
+AARaoul_158b <- AARaoul_158b[, c(columns, setdiff(names(AARaoul_158b),columns))]
+# Merge the dataframes
+All158b <- merge(Growth158b, AARaoul_158b, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE) 
+
+# Reorder columns in both dataframes
+Growth159 <- Growth159[, c(columns, setdiff(names(Growth159), columns))]
+AARaoul_159 <- AARaoul_159[, c(columns, setdiff(names(AARaoul_159),columns))]
+# Merge the dataframes
+All159 <- merge(Growth159, AARaoul_159, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE) 
+
+# Reorder columns in both dataframes
+Growth827 <- Growth827[, c(columns, setdiff(names(Growth827), columns))]
+AARaoul_827 <- AARaoul_827[, c(columns, setdiff(names(AARaoul_827),columns))]
+# Merge the dataframes
+All827 <- merge(Growth827, AARaoul_827, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE) 
+
+#ath-miR5642b
+# Reorder columns in both dataframes
+Growth5642b <- Growth5642b[, c(columns, setdiff(names(Growth5642b), columns))]
+AARaoul_5642b <- AARaoul_5642b[, c(columns, setdiff(names(AARaoul_5642b),columns))]
+# Merge the dataframes
+All5642b <- merge(Growth5642b, AARaoul_5642b, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE)
+
+# Mix of 5 
+# Reorder columns in both dataframes
+GrowthMix5 <- GrowthMix5[, c(columns, setdiff(names(GrowthMix5), columns))]
+AARaoul_mixmiR5 <- AARaoul_mixmiR5[, c(columns, setdiff(names(AARaoul_mixmiR5),columns))]
+# Merge the dataframes
+AllMix5 <- merge(GrowthMix5, AARaoul_mixmiR5, by = c("Time", "miRNA", "Pair", "Treatment"), all = TRUE)
+
+```
+
+
+#Dual Y axis ath-miR158a3p
+```{r}
+coeff<- 40000
+
+# Create a new variable to group color and linetype together
+All158a3p$Treatment2 <- factor(All158a3p$Treatment, levels = c("Plant miRNAs", "Scramble miRNAs"))
+
+boxRaoul158a3p<- ggplot(All158a3p) +
+  # First plot for OD600: Line, Points, and Error bars with color and linetype based on Treatment2
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Adding data of AA consumption
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Customize linetypes and colors for Treatment2
+  scale_linetype_manual(name = "Treatment", values = c("solid", "twodash")) +  # Solid for Plant miRNAs, dashed for Scramble miRNAs
+  scale_color_manual(name = "Treatment", values = c("darkslategray4", "lightcyan3")) +  # darkslategray4 for Plant miRNAs, lightcyan3 for Scramble miRNAs
+  
+  # Adjust y-axis and add a secondary axis
+  scale_y_continuous(name = "", sec.axis = sec_axis(~ . * coeff, name = "")) +
+  
+  # Add labels and adjust legend
+  labs(x = "Time (hours)", color = "", fill = "", group = "", linetype = "Treatment", shape = "") +
+  
+  # Apply clean theme
+  theme_pubr() + 
+  theme(axis.text.y = element_text(color = "darkslategray4"),
+        axis.text.y.right = element_text(color = "black"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12)) +
+  ggtitle(expression(italic("Raoultella") ~ "ath-miR158a3p")) +
+  theme(plot.title = element_text(hjust = 0.005, size = 14)) + 
+  theme(legend.position = "bottom") + 
+  annotate("text", x = 4, y = 0.22, label = "*", size = 10) + 
+  
+  # Merge the color and linetype legends together
+  guides(color = guide_legend(order = 1), 
+         linetype = guide_legend(order = 1))
+
+  # Adjust the plot appearance further
+  grow_consume158a3p<-ggpar( boxRaoul158a3p,ylim = c(0.0, 0.5))
+    
+  # Add annotations for axes
+  grow_consume158a3p_2<-annotate_figure( grow_consume158a3p,
+           bottom = text_grob("", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consume158a3p_2
+    
+     ggsave(grow_consume158a3p_2, file=here("Output","Figures","Raoul_grow_consume158a3p.tiff"),width = 15, height = 15, units = "cm", compression='lzw')
+     
+     grow_consume158a3p_3<-grow_consume158a3p+theme(legend.position = "none")
+saveRDS(grow_consume158a3p_3, file = here("Output","Figures","Raoul_grow_consume158a3p.rds"))   
+```
+  
+
+
+
+#Dual Y axis ath-miR158b
+```{r}
+coeff<- 40000
+# Create a new variable to group color and linetype together
+All158b$Treatment2 <- factor(All158b$Treatment, levels = c("Plant miRNAs", "Scramble miRNAs"))
+
+boxRaoul158b<- ggplot(All158b) +
+  # First plot for OD600: Line, Points, and Error bars with color and linetype based on Treatment2
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Adding data of AA consumption
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Customize linetypes and colors for Treatment2
+  scale_linetype_manual(name = "Treatment", values = c("solid", "twodash")) +  # Solid for Plant miRNAs, dashed for Scramble miRNAs
+  scale_color_manual(name = "Treatment", values = c("darkslategray4", "lightcyan3")) +  # darkslategray4 for Plant miRNAs, lightcyan3 for Scramble miRNAs
+  
+  # Adjust y-axis and add a secondary axis
+  scale_y_continuous(name = "", sec.axis = sec_axis(~ . * coeff, name = "")) +
+  
+  # Add labels and adjust legend
+  labs(x = "Time (hours)", color = "", fill = "", group = "", linetype = "Treatment", shape = "") +
+  
+  # Apply clean theme
+  theme_pubr() + 
+  theme(axis.text.y = element_text(color = "darkslategray4"),
+        axis.text.y.right = element_text(color = "black"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12)) +
+  ggtitle(expression(italic("Raoultella") ~ "ath-miR158b")) +
+  theme(plot.title = element_text(hjust = 0.005, size = 14)) + 
+  theme(legend.position = "bottom") + 
+  annotate("text",x=1.05,y=0.48,label="*", size = 10)  + 
+  
+  # Merge the color and linetype legends together
+  guides(color = guide_legend(order = 1), 
+         linetype = guide_legend(order = 1))
+
+  # Adjust the plot appearance further
+  grow_consume158b<-ggpar( boxRaoul158b,ylim = c(0.0, 0.5))
+    
+  # Add annotations for axes
+  grow_consume158b_2<-annotate_figure( grow_consume158b,
+           bottom = text_grob("", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consume158b_2
+
+    ggsave(grow_consume158b_2, file=here("Output","Figures","Raoul_grow_consume158b.tiff"),width = 15, height = 15, units = "cm", compression='lzw')
+    
+ grow_consume158b_3<-grow_consume158b+theme(legend.position = "none")
+ saveRDS(grow_consume158b_3, file = here("Output","Figures","Raoul_grow_consume158b.rds"))   
+
+```
+
+#Dual Y axis ath-miR159
+```{r}
+coeff<- 40000
+boxRaoul159<- ggplot(All159) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatement", shape="")+
+ theme_pubr()+theme( axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+  legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle("Raoultella ath-miR159")+theme(plot.title = element_text(hjust = 0.005, size=20))+ theme(legend.position = "none")   
+  grow_consume159<-ggpar( boxRaoul159,ylim = c(0.0, 0.5))
+  
+  grow_consume159<-annotate_figure( grow_consume159,
+           bottom = text_grob("Time (hours)", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consume159
+```
+
+#Dual Y axis ath-miR827
+```{r}
+coeff<- 40000
+boxRaoul827<- ggplot(All827) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Mean_Predicted_AA/coeff,group=Treatment),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatement", shape="")+
+ theme_pubr()+theme( axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+  legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle("Raoultella ath-miR827")+theme(plot.title = element_text(hjust = 0.005, size=20))+ theme(legend.position = "none")   
+  grow_consume827<-ggpar( boxRaoul827,ylim = c(0.0, 0.6))
+  
+  grow_consume827<-annotate_figure( grow_consume827,
+           bottom = text_grob("Time (hours)", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consume827
+
+```
+
+
+#Dual Y axis ath-miR5642b
+```{r}
+coeff2<- 33000
+
+# Create a new variable to group color and linetype together
+All5642b$Treatment2 <- factor(All5642b$Treatment, levels = c("Plant miRNAs", "Scramble miRNAs"))
+
+boxRaoul5642b<- ggplot(All5642b) +
+  # First plot for OD600: Line, Points, and Error bars with color and linetype based on Treatment2
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Adding data of AA consumption
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff2, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff2, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff2, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Customize linetypes and colors for Treatment2
+  scale_linetype_manual(name = "Treatment", values = c("solid", "twodash")) +  # Solid for Plant miRNAs, dashed for Scramble miRNAs
+  scale_color_manual(name = "Treatment", values = c("darkslategray4", "lightcyan3")) +  # darkslategray4 for Plant miRNAs, lightcyan3 for Scramble miRNAs
+  
+  # Adjust y-axis and add a secondary axis
+  scale_y_continuous(name = "", sec.axis = sec_axis(~ . * coeff2, name = "")) +
+  
+  # Add labels and adjust legend
+  labs(x = "Time (hours)", color = "", fill = "", group = "", linetype = "Treatment", shape = "") +
+  
+  # Apply clean theme
+  theme_pubr() + 
+  theme(axis.text.y = element_text(color = "darkslategray4"),
+        axis.text.y.right = element_text(color = "black"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12)) +
+  ggtitle(expression(italic("Raoultella") ~ "ath-miR5642b")) +
+  theme(plot.title = element_text(hjust = 0.005, size = 14)) + 
+  theme(legend.position = "bottom") + 
+  annotate("text",x=0.95,y=0.49,label="*", size = 10)+
+  annotate("text",x=2,y=0.45,label="*", size = 10)+
+  annotate("text",x=2,y=0.28,label="*", size = 10, color="darkslategray4") + 
+  
+  # Merge the color and linetype legends together
+  guides(color = guide_legend(order = 1), 
+         linetype = guide_legend(order = 1))
+
+  # Adjust the plot appearance further
+  grow_consume5642b<-ggpar( boxRaoul5642b,ylim = c(0.0, 0.5))
+    
+  # Add annotations for axes
+  grow_consume5642b_2<-annotate_figure( grow_consume5642b,
+           bottom = text_grob("", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consume5642b_2
+
+    ggsave(grow_consume5642b_2, file=here("Output","Figures","Raoul_grow_consume5642b.tiff"),width = 15, height = 15, units = "cm", compression='lzw')
+   
+    grow_consume5642b_3<-grow_consume5642b+theme(legend.position = "none")
+     saveRDS(grow_consume5642b_3, file = here("Output","Figures","Raoul_grow_consume5642b.rds"))
+  
+```
+
+#Dual Y axis Mix of 5
+```{r}
+coeff4<- 37500
+
+# Create a new variable to group color and linetype together
+AllMix5$Treatment2 <- factor(AllMix5$Treatment, levels = c("Plant miRNAs", "Scramble miRNAs"))
+
+boxRaoulMix5<- ggplot(AllMix5) +
+  # First plot for OD600: Line, Points, and Error bars with color and linetype based on Treatment2
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = OD600, color = Treatment2, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Adding data of AA consumption
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff4, group = Treatment2, linetype = Treatment2), 
+               fun = mean, geom = 'line', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff4, group = Treatment2), 
+               fun = mean, geom = 'point', position = position_dodge(0.2)) +
+  stat_summary(mapping = aes(x = Time, y = Mean_Predicted_AA / coeff4, group = Treatment2), 
+               fun.data = mean_cl_boot, geom = 'errorbar', width = 0.1, position = position_dodge(0.2)) +
+  
+  # Customize linetypes and colors for Treatment2
+  scale_linetype_manual(name = "Treatment", values = c("solid", "twodash")) +  # Solid for Plant miRNAs, dashed for Scramble miRNAs
+  scale_color_manual(name = "Treatment", values = c("darkslategray4", "lightcyan3")) +  # darkslategray4 for Plant miRNAs, lightcyan3 for Scramble miRNAs
+  
+  # Adjust y-axis and add a secondary axis
+  scale_y_continuous(name = "", sec.axis = sec_axis(~ . * coeff4, name = "")) +
+  
+  # Add labels and adjust legend
+  labs(x = "Time (hours)", color = "", fill = "", group = "", linetype = "Treatment", shape = "") +
+  
+  # Apply clean theme
+  theme_pubr() + 
+  theme(axis.text.y = element_text(color = "darkslategray4"),
+        axis.text.y.right = element_text(color = "black"),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12)) +
+  ggtitle(expression(italic("Raoultella") ~ "mix of 5 miRNAs")) +
+  theme(plot.title = element_text(hjust = 0.005, size = 14)) + 
+  theme(legend.position = "bottom") + 
+  annotate("text",x=4,y=0.22,label="*", size = 10) + 
+  
+  # Merge the color and linetype legends together
+  guides(color = guide_legend(order = 1), 
+         linetype = guide_legend(order = 1))
+
+  # Adjust the plot appearance further
+  grow_consumeMix5<-ggpar( boxRaoulMix5,ylim = c(0.0, 0.5))
+    
+  # Add annotations for axes
+  grow_consumeMix5_2<-annotate_figure( grow_consumeMix5,
+           bottom = text_grob("", size = 12),
+            left = text_grob("Optical density (600 nm)",size = 12, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 12, rot=270))
+    grow_consumeMix5_2
+
+    ggsave(grow_consumeMix5_2, file=here("Output","Figures","Raoul_grow_consumeMix5.tiff"),width = 15, height = 15, units = "cm", compression='lzw')
+    
+    grow_consumeMix5_3<-grow_consumeMix5+theme(legend.position = "none")
+    saveRDS(grow_consumeMix5_3, file = here("Output","Figures","Raoul_grow_consumeMix5.rds"))
+
+```
+

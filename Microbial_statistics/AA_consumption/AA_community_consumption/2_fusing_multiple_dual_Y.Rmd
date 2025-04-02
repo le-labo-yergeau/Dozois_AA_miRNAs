@@ -1,0 +1,329 @@
+---
+title: "fusing multiple dual Y"
+author: "Marc-Antoine Duchesne"
+date: "2023-07-23"
+output: html_document
+---
+
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix,gridExtra)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "t.test_results"), recursive=TRUE)
+```
+
+
+#save dataframe from other scripts and import them
+```{r}
+#save(combidata_mix827, file=here("Raw_Data","combidata","combidata_mix827.Rda"))
+#save(combidata_pro5642, file=here("Raw_Data","combidata","combidata_pro5642.Rda"))
+#save(combidata158, file=here("Raw_Data","combidata","combidata_lys158a3p.Rda"))
+#save(combidata827, file=here("Raw_Data","combidata","combidata_lys827.Rda"))
+#save(combidata159, file=here("Raw_Data","combidata","combidata_lys159.Rda"))
+#save(combidata_mix159, file=here("Raw_Data","combidata","combidata_mix159.Rda"))
+#save(combidata_pro827, file=here("Raw_Data","combidata","combidata_pro827.Rda"))
+
+  load(file.path("Raw_Data","combidata","combidata_lys159.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_mix827.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_pro5642.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_lys158a3p.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_lys827.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_mix159.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_pro827.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_gly827.Rda"))
+  load(file.path("Raw_Data","combidata","combidata_gly5642b.Rda"))
+
+```
+
+
+#lys827
+```{r}
+coeff<- 50000
+box4points<- ggplot(combidata827) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Traitement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Traitement", shape="")+
+ theme_pubclean()+theme(
+ 
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+  
+   legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle("L-lysine ath-miR827")+theme(plot.title = element_text(hjust = 0.005, size=20))+ theme(legend.position = "none")   
+  grow_consume827<-ggpar( box4points,ylim = c(0.0, 0.45))
+    grow_consume827
+
+  
+```
+#158a3p lys
+```{r}
+box4points<- ggplot(combidata158) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Traitement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="Traitement",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Traitement", shape="")+
+ theme_pubclean()+theme(
+   axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(color = "darkslategray4", size = 18),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black", size = 18),
+   legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle("L-lysine ath-miR158a-3p")+theme(plot.title = element_text(hjust = 0.005, size = 20))+ theme(legend.position = "none")   
+  grow_consume158<-ggpar( box4points,ylim = c(0.0, 0.45))
+    grow_consume158
+  
+  
+```
+#159 lys
+```{r}
+box4points<- ggplot(combidata159) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Traitement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="Traitement",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Traitement", shape="")+
+ theme_pubclean()+theme(
+   axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(color = "darkslategray4", size = 18),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black", size = 18),
+   legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+annotate("text",x=2,y=0.21,label="*", size = 10 )+annotate("text",x=3,y=0.17,label="*", size = 10 )+ggtitle("L-lysine ath-miR159a")+theme(plot.title = element_text(hjust = 0.005,  size = 20))+ theme(legend.position = "none")   
+  grow_consume159<-ggpar( box4points,ylim = c(0.0, 0.45))
+    grow_consume159
+
+  
+```
+
+#mix 827
+```{r}
+box4points<- ggplot(combidata_mix827) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Traitement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Traitement", shape="")+
+ theme_pubclean()+theme(
+     axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(color = "darkslategray4", size = 18),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black", size = 18),
+   legend.title = element_text(size=20),
+   legend.text = element_text(size=20)
+  )+ggtitle("L-AA mix ath-miR827")+theme(plot.title = element_text(hjust = 0.005, size=20))+ theme(legend.position = "none")   
+  grow_consume_mix827<-ggpar( box4points,ylim = c(0.1, 0.30))
+    grow_consume_mix827
+ 
+  
+```
+#mix 159
+```{r}
+box4points<- ggplot(combidata_mix159) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_540/coeff,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Traitement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="Traitement",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Traitement", shape="")+
+ theme_pubclean()+theme(
+     axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(color = "darkslategray4", size = 18),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black", size = 18),
+   legend.title = element_text(size=20),
+   legend.text = element_text(size=20)
+  )+ggtitle("L-AA mix ath-miR159a")+theme(plot.title = element_text( size=20))+ theme(legend.position = "none")   
+  grow_consume_mix159<-ggpar( box4points,ylim = c(0.1, 0.31))
+    grow_consume_mix159
+```
+
+#Pro 5642b
+```{r}
+box4points<- ggplot(combidata_pro5642) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Traitement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="Traitement",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Traitement", shape="")+
+ theme_pubclean()+theme(
+     axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(color = "darkslategray4", size = 18),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black", size = 18),
+   legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle("L-proline ath-miR5642b")+theme(plot.title = element_text( size=20))+ theme(legend.position = "none")   
+  grow_consume_pro5642<-ggpar( box4points,ylim = c(0.0, 0.33))
+    grow_consume_pro5642
+
+  
+```
+
+#pro 827
+```{r}
+box4points<- ggplot(combidata_pro827) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Traitement",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff,name="")) +
+  scale_color_manual(name="Traitement",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Traitement", shape="")+
+ theme_pubclean()+theme(
+      axis.title.x = element_text(size = 18),
+    axis.title.y = element_text(color = "darkslategray4", size = 18),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black", size = 18),
+   legend.title = element_text(size=18),
+   legend.text = element_text(size=18)
+  )+ggtitle("L-proline ath-miR827")+theme(plot.title = element_text( size =20))+ theme(legend.position = "none")   
+  grow_consume_pro827<-ggpar( box4points,ylim = c(0.0, 0.31))
+    grow_consume_pro827
+ 
+  
+```
+
+#gly827
+```{r}
+coeff2<- 20000
+box4points<- ggplot(combidata_gly827) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff2,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff2,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff2,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatment",values=c("solid", "twodash"))+
+  scale_y_continuous(name="", sec.axis = sec_axis(~.*coeff2,name="")) +
+  scale_color_manual(name="Treatment",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatment", shape="")+
+ theme_pubclean()+theme(
+    axis.title.y = element_text(color = "darkslategray4"),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black")
+  )+ggtitle("Glycine ath-miR827")+theme(plot.title = element_text( size =20))+ theme(legend.position = "none")   
+  grow_consume_gly827<-ggpar( box4points,ylim = c(0.0, 0.4))
+    grow_consume_gly827
+```
+
+#gly5642b
+```{r}
+box4points<- ggplot(combidata_gly5642b) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment, linetype =Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment), fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=OD_600,color=Treatment,group=Treatment),fun.data=mean_cl_boot,
+        geom='errorbar',
+        width=0.1,position = position_dodge(0.2))+
+  #Adding data of AA consumption
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff2,group=Treatment.2,linetype=Treatment),fun = mean,geom='line',position = position_dodge(0.2)) +
+    stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff2,group=Treatment.2),fun=mean,geom='point',position = position_dodge(0.2))+
+  stat_summary(mapping=aes(x=Time, y=Predicted_AA_520/coeff2,group=Treatment.2),fun.data=mean_cl_boot,geom='errorbar',width=0.1,position = position_dodge(0.2))+
+  scale_linetype_manual(name = "Treatment",values=c("solid", "twodash"))+
+  scale_y_continuous(name="  ", sec.axis = sec_axis(~.*coeff2,name="")) +
+  scale_color_manual(name="Treatment",values = c("darkslategray4","lightcyan3"))+
+  labs(x = "", color="",fill="", group="",linetype="Treatment", shape="")+
+ theme_pubclean()+theme(
+    axis.title.y = element_text(color = "darkslategray4"),
+    axis.text.y = element_text(color = "darkslategray4"),
+    axis.text.y.right = element_text(color = "black"),
+    axis.title.y.right = element_text(color = "black")
+  )+ggtitle("Glycine ath-miR5642b")+theme(plot.title = element_text( size =20))+ theme(legend.position = "none")   
+  grow_consume_gly5642b<-ggpar( box4points,ylim = c(0.0, 0.4))
+    grow_consume_gly5642b
+```
+
+
+#ggsave all
+```{r}
+lys=ggarrange(grow_consume158,grow_consume159,grow_consume827, nrow = 1,common.legend = FALSE)
+com_1 <- ggarrange(grow_consume_mix159,grow_consume_mix827,grow_consume_pro5642, nrow =1 )
+com_2 <-ggarrange(grow_consume_pro5642,grow_consume_gly827,grow_consume_gly5642b, nrow =1)
+
+all=ggarrange(lys,com_1,com_2, nrow = 3)
+
+  
+
+ all2<-annotate_figure(all,
+           bottom = text_grob("Time (hours)", size = 20),
+            left = text_grob("Optical density (600 nm)",size = 20, rot=90, color = "darkslategray4"),
+          right= text_grob("L-amino acid concentration (μM)",size = 20, rot=270))
+  ggsave(all2, file=here("Output", "Figures", "All_everymiARN_dualY.tiff"),width = 40, height = 30, units = "cm", compression='lzw') 
+  saveRDS(all2,file = here("Output","All_everymiARN_dualY.rds"))
+ 
+```
+
+
