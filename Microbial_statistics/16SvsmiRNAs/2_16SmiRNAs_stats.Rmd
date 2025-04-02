@@ -1,0 +1,106 @@
+---
+title: "2_16SmiRNAs_stats"
+author: "Jessica A. Dozois"
+date: "2024-04-25"
+output: html_document
+---
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,writexl,devtools)
+```
+
+#Importation
+Importing abundance data frame and mapping file.
+```{r Importation}
+ASV_df<-read.table(file=here("Raw_Data","feature_table_filt_combi.tsv"), header=T, sep="\t", comment.char = "", check.names = F) #8703 obs 277 variables
+ASV_df$`#FEATURE_ID` <- paste0("ASV#",ASV_df$`#FEATURE_ID`)
+rownames(ASV_df)<-ASV_df$`#FEATURE_ID` # Feature ID as row names
+ASV_df<-ASV_df[,-1] #removing the Feature Id column
+ASV_df2<-ASV_df[!grepl('Chloroplast', ASV_df$taxonomy),]#8558 obs 276 variables #remove Chloroplasts
+ASV_df3<-ASV_df2[!grepl('Mitochondria', ASV_df2$taxonomy),]##8449 obs 276 variables variables #remove Mitochondria
+ASV_df4<-ASV_df3[!grepl('Eukaryota', ASV_df3$taxonomy),]##8440 obs 276 variables variables #remove Eukaryotes
+
+
+#Select only samples from the in vitro experiment
+ASV_df5 <- ASV_df4[, !grepl('_L001', names(ASV_df4)), drop = FALSE]
+#8440 obs 171 variables
+#removing taxonomy column
+ASV_df_notaxo <- ASV_df5[,c(1:170)]
+tax<-ASV_df5%>%select("taxonomy")
+#Remove absent taxa
+ASVdf6<-ASV_df_notaxo[!rowSums(ASV_df_notaxo[])==0,] # 93 obs 170 variables
+
+# Merge taxonomy data with ASV_df based on common_id
+ASVdf_tax <- merge(ASVdf6, tax, by = "row.names", all.x = TRUE) #93 obs 172 variables
+rownames(ASVdf_tax)<-ASVdf_tax$Row.names
+ASVdf_tax<-ASVdf_tax[,-1]
+
+mapping_df<-read.table(file=here("Raw_Data","mapping_file.tsv"), row.names=1, header=T, sep="\t", comment.char = "", check.names = F) #170 obs. 5 variables 
+
+taxa<-ASVdf_tax%>%select("taxonomy")
+```
+
+#Creating folders
+```{r Creating folders}
+dir.create("Output")
+dir.create(file.path("Output","Permanova"),recursive = T)
+```
+
+#Hellinger transformation and subsetting mix miRNAs
+Hellinger transformation on the abundance data frame. To transform this data it is important to transpose(rotate) the data frame.
+```{r Hellinger and subsetting}
+rotate_asv_df <- t(ASV_df_notaxo)
+rotate_asv_df <- decostand(rotate_asv_df, method="hellinger")
+  
+#Subset by dose
+#Exposure to all five miRNAs
+map_all5<- mapping_df[mapping_df$miRNA == "all5", ] #80 obs 5 variables
+all5samples<- row.names(map_all5)
+all5_df<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% all5samples)]
+rotate_all5 <- t(all5_df)
+rotate_all5 <- decostand(rotate_all5, method="hellinger")
+```
+
+#Hellinger and subsetting single miRNA
+```{r Hellinger and subsetting}
+#Exposure to a single miRNA
+map2uM<-mapping_df[mapping_df$Dose == "2", ] #90 obs 5 variables
+samples_2uM<- row.names(map2uM)
+df_2uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_2uM)]
+df_2uM<-df_2uM[rowSums(df_2uM[])>0,]#52 obs 5 variables
+rotate_2uM <- t(df_2uM)
+rotate_2uM <- decostand(rotate_2uM, method="hellinger")
+
+```
+
+
+#PERMANOVA
+```{r PERMANOVA}
+set.seed(11) #fixes the permutation round
+
+#All five
+#Betadisper was performed and is OK
+permanova_all5<- adonis2(rotate_all5~N_Source*Treatment,data=map_all5, permutations = 999, method="euclidean",by="terms")
+permanova_all5
+#Treatment 0.011**
+#N_Source:Treatment 0.013 **
+
+
+
+#Single_miRNAs
+#Betadisper was performed and is OK for Treatment and miRNA but not N_source
+permanova2uM<- adonis2(rotate_2uM~Treatment*miRNA*N_Source,data=map2uM,permutations = 999, method="euclidean",by="terms")
+permanova2uM #N_source 0.001 ***
+
+```
+
+#Permanava results to excel
+```{r}
+#Combining row names to each PERMANOVA result data frame
+all5miRNAs<-cbind(" "=rownames(permanova_all5), permanova_all5)
+all2uM<-cbind(" "=rownames(permanova2uM), permanova2uM)
+sheets <- list("all10uM"= all5miRNAs,"all2uM"= all2uM)
+write_xlsx(sheets, file.path("Output","Permanova","16S_miRNAs_PERMANOVA.xlsx"))
+
+```

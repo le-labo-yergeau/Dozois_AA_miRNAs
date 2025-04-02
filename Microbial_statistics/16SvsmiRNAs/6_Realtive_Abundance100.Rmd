@@ -1,0 +1,150 @@
+---
+title: "5_Realtive_Abundance100"
+author: "Jessica A. Dozois"
+date: '2023-10-23'
+output: html_document
+---
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,tidyr,ggpubr,ggh4x, rstatix, stringr)
+```
+
+#Importation
+Importing abundance data frame and mapping file.
+```{r Importation}
+ASV_df<-read.table(file=here("Raw_Data","feature_table_filt_combi.tsv"), header=T, sep="\t", comment.char = "", check.names = F) #8703 obs 277 variables
+ASV_df$`#FEATURE_ID` <- paste0("ASV#",ASV_df$`#FEATURE_ID`)
+rownames(ASV_df)<-ASV_df$`#FEATURE_ID` # Feature ID as row names
+ASV_df<-ASV_df[,-1] #removing the Feature Id column
+ASV_df2<-ASV_df[!grepl('Chloroplast', ASV_df$taxonomy),]#8558 obs 276 variables #remove Chloroplasts
+ASV_df3<-ASV_df2[!grepl('Mitochondria', ASV_df2$taxonomy),]##8449 obs 276 variables variables #remove Mitochondria
+ASV_df4<-ASV_df3[!grepl('Eukaryota', ASV_df3$taxonomy),]##8440 obs 276 variables variables #remove Eukaryotes
+
+#Select only samples from the in vitro experiment
+ASV_df5 <- ASV_df4[, !grepl('_L001', names(ASV_df4)), drop = FALSE]
+#8440 obs 171 variables
+#removing taxonomy column
+ASV_df_notaxo <- ASV_df5[,c(1:170)]
+tax<-ASV_df5%>%select("taxonomy")
+#Remove absent taxa
+ASVdf6<-ASV_df_notaxo[!rowSums(ASV_df_notaxo[])==0,] 
+
+# Merge taxonomy data with ASV_df based on common_id
+ASVdf_tax <- merge(ASVdf6, tax, by = "row.names", all.x = TRUE)
+rownames(ASVdf_tax)<-ASVdf_tax$Row.names
+ASVdf_tax<-ASVdf_tax[,-1]
+
+mapping_df<-read.table(file=here("Raw_Data","mapping_file.tsv"), row.names=1, header=T, sep="\t", comment.char = "", check.names = F) #170 obs. 5 variables 
+
+```
+
+
+
+## Preparing abundance matrix
+```{r}
+ASV_df_notaxo_t <- t(ASV_df_notaxo) # transposing table, samples as rows, species as columns to match metadata
+com16_rel <- (ASV_df_notaxo_t/rowSums(ASV_df_notaxo_t)) #Normalization by relative abundance
+(rowSums(com16_rel)) #Sanity check
+
+```
+
+
+#Subsetting
+```{r}
+com16_rel_map<- merge(mapping_df,com16_rel, by = 'row.names', all = TRUE )
+#Exposure to all five miRNAs
+Dose10uM<-com16_rel_map[com16_rel_map$Dose=="10",]
+```
+
+#Subsetting by ASVs of interest
+```{r}
+ASVs_interest<- c("Row.names","N_Source","miRNA","Dose","Treatment","Pair","ASV#4","ASV#6","ASV#172","ASV#358")
+ASVs_interest_df<- Dose10uM[,colnames(Dose10uM) %in% ASVs_interest ] #80 obs 10 variables
+
+ASV4Lys<-ASVs_interest_df[(ASVs_interest_df$N_Source=="Lysine"), c("Dose","Treatment","N_Source","Pair","ASV#4")]
+colnames(ASV4Lys)[5] <- "Relative_abundance"  
+ASV4Lys$Taxonomy<- "ASV#4 \n Raoultella"
+
+ASV6Mix<-ASVs_interest_df[(ASVs_interest_df$N_Source=="mix_17AA"), c("Dose","Treatment","N_Source","Pair","ASV#6")]
+colnames(ASV6Mix)[5] <- "Relative_abundance"  
+ASV6Mix$Taxonomy<- "ASV#6 \n Acinetobacter"
+
+ASV6Phe<-ASVs_interest_df[(ASVs_interest_df$N_Source=="Phenylalanine"), c("Dose","Treatment","N_Source","Pair","ASV#6")]
+colnames(ASV6Phe)[5] <- "Relative_abundance"  
+ASV6Phe$Taxonomy<- "ASV#6 \n Acinetobacter"
+
+ASV172Lys<-ASVs_interest_df[(ASVs_interest_df$N_Source=="Lysine"), c("Dose","Treatment","N_Source","Pair","ASV#172")]
+colnames(ASV172Lys)[5] <- "Relative_abundance"  
+ASV172Lys$Taxonomy<- "ASV#172 \n Chryseobacterium"
+
+ASV358Lys<-ASVs_interest_df[(ASVs_interest_df$N_Source=="Lysine"), c("Dose","Treatment","N_Source","Pair","ASV#358")]
+colnames(ASV358Lys)[5] <- "Relative_abundance"  
+ASV358Lys$Taxonomy<- "ASV#358 \n Chryseobacterium"
+
+
+combined_ASVs_sig <- rbind(ASV4Lys,ASV6Mix,
+                       ASV6Phe,ASV172Lys,ASV358Lys)
+combined_ASVs_sig$N_Taxonomy<-paste(combined_ASVs_sig$N_Source,combined_ASVs_sig$Taxonomy)
+
+combined_ASVs_sig <- combined_ASVs_sig %>%
+  mutate(across(N_Source, str_replace, "mix_17AA", 'Mix 17 AA'))
+```
+
+#Boxplot with ASVs of interest
+```{r}
+combined_ASVs_sig$Treatment<-recode_factor(combined_ASVs_sig$Treatment, scramble= "Scramble miRNAs",plant="Plant miRNAs" )
+boxsig<- ggplot(combined_ASVs_sig, aes(x=Treatment, y=Relative_abundance*100)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge())+
+  theme_light() +
+  facet_nested_wrap(~N_Source+Taxonomy, scales="free_y", nrow=1, nest_line = TRUE) +
+scale_x_discrete()+
+theme(axis.text.x=element_blank() ,axis.ticks.x = element_blank(),strip.background = element_rect(fill="white", linewidth =0, linetype="solid"))+
+theme(strip.text = element_text(colour = 'black', size=12))+
+scale_fill_manual(values = c("#003049","#2a7f62"))+
+scale_colour_manual(values = c("#003049","#2a7f62"))
+boxsig
+
+boxsig_2<-boxsig+theme(axis.title.y = element_text(size=12)) +labs(x="", y="Relative abundance of taxa (%)")+ theme(legend.title = element_text(size = 12) ,legend.text = element_text(size=12))+scale_y_continuous(labels = scales::number_format(accuracy = 0.01), limits = c(0, NA))
+boxsig_2
+
+  
+ggsave(boxsig_2, file=here("Output","ASVs_sig.tiff"),units="cm", width=28, height=12, compression='lzw')
+
+```
+
+#Assumptions and statistics
+```{r}
+#Verifying assmumptions
+
+#Normality assumption
+combined_ASVs_sig %>%
+  group_by(N_Source,Taxonomy) %>%
+  shapiro_test(Relative_abundance) #ok
+
+#Equality of variances assumption
+combined_ASVs_sig %>%
+  group_by(N_Source,Taxonomy) %>%
+  levene_test(Relative_abundance~Treatment) #ok
+
+#Computing the statistical test
+stat.test <- combined_ASVs_sig %>%
+  group_by(N_Source,Taxonomy) %>%
+  t_test(Relative_abundance ~ Treatment,p.adjust.method = 'none') %>%
+  adjust_pvalue(method = "BH") %>%
+  add_significance()
+stat.test
+
+#Adding the coordinates of the p-values
+stat.test.pos<-stat.test %>% add_xy_position(x="Treatment", group="Taxonomy",fun = "max")
+stat.test.pos$y.position<-c(1.25,0.6,16.4,5,1.5)
+stat.test.pos$xmin<-c(1,1,1,1,1)
+stat.test.pos$xmax<-c(2,2,2,2,2)
+box_sig2<- boxsig_2+stat_pvalue_manual(
+    stat.test.pos, hide.ns = TRUE, 
+    label = "p.adj.signif",tip.length = 0, size=6)
+box_sig2
+ggsave(box_sig2, file=here("Output","ASVs_sig_stat.tiff"),units="cm", width=27, height=12, compression='lzw')
+saveRDS(box_sig2, file = here("Output","ASVs_sig_stat.rds"))
+```

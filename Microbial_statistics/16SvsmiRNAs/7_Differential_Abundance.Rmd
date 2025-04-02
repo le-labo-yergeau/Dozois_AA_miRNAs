@@ -1,0 +1,450 @@
+---
+title: "6_Differential_Abundance"
+author: "Jessica A. Dozois"
+date: '2023-10-25'
+output: html_document
+---
+
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,writexl, tidyr, phyloseq, DESeq2, ANCOMBC)
+
+#If there are problems with loading DESeq2 and ANCOMBC, please run the following lines:
+#install.packages("BiocManager")
+#BiocManager::install('DESeq2')
+#BiocManager::install('ANCOMBC')
+
+```
+
+#Importation
+Importing abundance data frame and mapping file.
+```{r Importation}
+ASV_df<-read.table(file=here("Raw_Data","feature_table_filt_combi.tsv"), header=T, sep="\t", comment.char = "", check.names = F) #8703 obs 277 variables
+ASV_df$`#FEATURE_ID` <- paste0("ASV#",ASV_df$`#FEATURE_ID`)
+rownames(ASV_df)<-ASV_df$`#FEATURE_ID` # Feature ID as row names
+ASV_df<-ASV_df[,-1] #removing the Feature Id column
+ASV_df2<-ASV_df[!grepl('Chloroplast', ASV_df$taxonomy),]#8558 obs 276 variables #remove Chloroplasts
+ASV_df3<-ASV_df2[!grepl('Mitochondria', ASV_df2$taxonomy),]##8449 obs 276 variables variables #remove Mitochondria
+ASV_df4<-ASV_df3[!grepl('Eukaryota', ASV_df3$taxonomy),]##8440 obs 276 variables variables #remove Eukaryotes
+
+#Select only samples from the in vitro experiment
+ASV_df5 <- ASV_df4[, !grepl('_L001', names(ASV_df4)), drop = FALSE]
+#8440 obs 171 variables
+#removing taxonomy column
+ASV_df_notaxo <- ASV_df5[,c(1:170)]
+tax<-ASV_df5%>%select("taxonomy")
+#Remove absent taxa
+ASVdf6<-ASV_df_notaxo[!rowSums(ASV_df_notaxo[])==0,] 
+# Merge taxonomy data with ASV_df based on common_id
+ASVdf_tax <- merge(ASVdf6, tax, by = "row.names", all.x = TRUE)
+rownames(ASVdf_tax)<-ASVdf_tax$Row.names
+ASVdf_tax<-ASVdf_tax[,-1]
+
+mapping_df<-read.table(file=here("Raw_Data","mapping_file.tsv"), row.names=1, header=T, sep="\t", comment.char = "", check.names = F) #170 obs. 5 variables 
+mapping_df$Pair<-as.factor(mapping_df$Pair)
+
+taxa<-ASVdf_tax%>%select("taxonomy")
+
+```
+
+#Creating folders
+```{r Creating folders}
+dir.create(file.path("Output","DESeq2"),recursive = T)
+```
+
+#Mix miRs: Subsetting 
+```{r}
+#Subset by dose
+#Exposure to all five miRNAs
+map_all5<- mapping_df[mapping_df$miRNA == "all5", ] #80 obs 5 variables
+map_all5_o<-map_all5[order(rownames(map_all5)),]
+all5samples<- row.names(map_all5)
+all5_df<-ASVdf6[ , (names(ASVdf6) %in% all5samples)]
+
+#Mix
+Mix10uMmap<-map_all5[map_all5$N_Source=="mix_17AA",] # 10 obs 5 variables
+Mix10map_o<-Mix10uMmap[order(rownames(Mix10uMmap)),]
+samples_Mix10uM<- row.names(Mix10uMmap)
+df_Mix10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Mix10uM)]
+
+#Lysine
+Lys10uMmap<-map_all5[map_all5$N_Source=="Lysine",] # 10 obs 5 variables
+Lys10map_o<-Lys10uMmap[order(rownames(Lys10uMmap)),]
+samples_Lys10uM<- row.names(Lys10uMmap)
+df_Lys10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Lys10uM)]
+
+#Leucine
+Leu10uMmap<-map_all5[map_all5$N_Source=="Leucine",] # 10 obs 5 variables
+Leu10map_o<-Leu10uMmap[order(rownames(Leu10uMmap)),]
+samples_Leu10uM<- row.names(Leu10uMmap)
+df_Leu10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Leu10uM)]
+
+#Isoleucine
+Ile10uMmap<-map_all5[map_all5$N_Source=="Isoleucine",] # 10 obs 5 variables
+Ile10map_o<-Ile10uMmap[order(rownames(Ile10uMmap)),]
+samples_Ile10uM<- row.names(Ile10uMmap)
+df_Ile10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Ile10uM)]
+
+#Phenylalanine
+Phe10uMmap<-map_all5[map_all5$N_Source=="Phenylalanine",] # 10 obs 5 variables
+Phe10map_o<-Phe10uMmap[order(rownames(Phe10uMmap)),]
+samples_Phe10uM<- row.names(Phe10uMmap)
+df_Phe10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Phe10uM)]
+
+#Proline
+Pro10uMmap<-map_all5[map_all5$N_Source=="Proline",] # 10 obs 5 variables
+Pro10map_o<-Pro10uMmap[order(rownames(Pro10uMmap)),]
+samples_Pro10uM<- row.names(Pro10uMmap)
+df_Pro10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Pro10uM)]
+
+#Glycine
+Gly10uMmap<-map_all5[map_all5$N_Source=="Glycine",] # 10 obs 5 variables
+Gly10map_o<-Gly10uMmap[order(rownames(Gly10uMmap)),]
+samples_Gly10uM<- row.names(Gly10uMmap)
+df_Gly10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Gly10uM)]
+
+#Valine
+Val10uMmap<-map_all5[map_all5$N_Source=="Valine",] # 10 obs 5 variables
+Val10map_o<-Val10uMmap[order(rownames(Val10uMmap)),]
+samples_Val10uM<- row.names(Val10uMmap)
+df_Val10uM<-ASV_df_notaxo[ , (names(ASV_df_notaxo) %in% samples_Val10uM)]
+```
+
+
+https://lashlock.github.io/compbio/R_presentation.html
+https://microbiome.github.io/course_2021_radboud/differential-abundance-anaGlyis.html
+##Mix of all 5 miRs
+```{r}
+#Important in the design the order of the factors are very important. The goal here was to verify the effect of the treatment (scramble vs plant) considering the sample pairing. To do so, it is important to write Pair + Treatment. 
+#all5
+dds_all5 <- DESeqDataSetFromMatrix(countData=all5_df, 
+                              colData=map_all5_o, 
+                              design=~Pair+
+                              Treatment+N_Source) 
+dds_all5_A <- DESeq(dds_all5)
+all5_res <- results(dds_all5_A)
+all5_df_res<-as.data.frame(all5_res)
+all5_df_res_tax<-merge(all5_df_res,taxa, by='row.names')
+colnames(all5_df_res_tax)[1]<- "ASV#"
+colnames(all5_df_res_tax)[8] <- "Taxonomy"
+all5_df_res_tax_o<-all5_df_res_tax[order(all5_df_res_tax$padj),]
+all5_deseq_sig<-all5_df_res_tax_o %>% filter(padj < 0.05)
+
+
+#Mix
+dds_Mix10 <- DESeqDataSetFromMatrix(countData=df_Mix10uM, 
+                              colData=Mix10map_o, 
+                              design=~Pair+Treatment)
+dds_Mix10_A <- DESeq(dds_Mix10)
+Mix_res <- results(dds_Mix10_A)
+Mix_df_res<-as.data.frame(Mix_res)
+Mix_df_res_tax<-merge(Mix_df_res,taxa, by='row.names')
+colnames(Mix_df_res_tax)[1]<- "ASV#"
+colnames(Mix_df_res_tax)[8] <- "Taxonomy"
+Mix_df_res_tax_o<-Mix_df_res_tax[order(Mix_df_res_tax$padj),]
+Mix_deseq_sig<-Mix_df_res_tax_o %>% filter(padj < 0.05)
+
+#Lysine
+dds_Lys10 <- DESeqDataSetFromMatrix(countData=df_Lys10uM, 
+                              colData=Lys10map_o, 
+                              design=~Pair+Treatment)
+dds_Lys10_A <- DESeq(dds_Lys10)
+Lys_res <- results(dds_Lys10_A)
+Lys_df_res<-as.data.frame(Lys_res)
+Lys_df_res_tax<-merge(Lys_df_res,taxa, by='row.names')
+colnames(Lys_df_res_tax)[1]<- "ASV#"
+colnames(Lys_df_res_tax)[8] <- "Taxonomy"
+Lys_df_res_tax_o<-Lys_df_res_tax[order(Lys_df_res_tax$padj),]
+Lys_deseq_sig<-Lys_df_res_tax_o %>% filter(padj < 0.05)
+
+#Leucine
+dds_Leu10 <- DESeqDataSetFromMatrix(countData=df_Leu10uM, 
+                              colData=Leu10map_o, 
+                              design=~Pair+Treatment)
+dds_Leu10_A <- DESeq(dds_Leu10)
+Leu_res <- results(dds_Leu10_A)
+Leu_df_res<-as.data.frame(Leu_res)
+Leu_df_res_tax<-merge(Leu_df_res,taxa, by='row.names')
+colnames(Leu_df_res_tax)[1]<- "ASV#"
+colnames(Leu_df_res_tax)[8] <- "Taxonomy"
+Leu_df_res_tax_o<-Leu_df_res_tax[order(Leu_df_res_tax$padj),]
+Leu_deseq_sig<-Leu_df_res_tax_o %>% filter(padj < 0.05)
+
+#Isoleucine
+dds_Ile10 <- DESeqDataSetFromMatrix(countData=df_Ile10uM, 
+                              colData=Ile10map_o, 
+                              design=~Pair+Treatment)
+dds_Ile10_A <- DESeq(dds_Ile10)
+Ile_res <- results(dds_Ile10_A)
+Ile_df_res<-as.data.frame(Ile_res)
+Ile_df_res_tax<-merge(Ile_df_res,taxa, by='row.names')
+colnames(Ile_df_res_tax)[1]<- "ASV#"
+colnames(Ile_df_res_tax)[8] <- "Taxonomy"
+Ile_df_res_tax_o<-Ile_df_res_tax[order(Ile_df_res_tax$padj),]
+Ile_deseq_sig<-Ile_df_res_tax_o %>% filter(padj < 0.05)
+
+#Phenylalanine
+dds_Phe10 <- DESeqDataSetFromMatrix(countData=df_Phe10uM, 
+                              colData=Phe10map_o, 
+                              design=~Pair+Treatment)
+dds_Phe10_A <- DESeq(dds_Phe10)
+Phe_res <- results(dds_Phe10_A)
+Phe_df_res<-as.data.frame(Phe_res)
+Phe_df_res_tax<-merge(Phe_df_res,taxa, by='row.names')
+colnames(Phe_df_res_tax)[1]<- "ASV#"
+colnames(Phe_df_res_tax)[8] <- "Taxonomy"
+Phe_df_res_tax_o<-Phe_df_res_tax[order(Phe_df_res_tax$padj),]
+Phe_deseq_sig<-Phe_df_res_tax_o %>% filter(padj < 0.05)
+
+#Proline
+dds_Pro10 <- DESeqDataSetFromMatrix(countData=df_Pro10uM, 
+                              colData=Pro10map_o, 
+                              design=~Pair+Treatment)
+dds_Pro10_A <- DESeq(dds_Pro10)
+Pro_res <- results(dds_Pro10_A)
+Pro_df_res<-as.data.frame(Pro_res)
+Pro_df_res_tax<-merge(Pro_df_res,taxa, by='row.names')
+colnames(Pro_df_res_tax)[1]<- "ASV#"
+colnames(Pro_df_res_tax)[8] <- "Taxonomy"
+Pro_df_res_tax_o<-Pro_df_res_tax[order(Pro_df_res_tax$padj),]
+Pro_deseq_sig<-Pro_df_res_tax_o %>% filter(padj < 0.05)
+
+#Glycine
+dds_Gly10 <- DESeqDataSetFromMatrix(countData=df_Gly10uM, 
+                              colData=Gly10map_o, 
+                              design=~Pair+Treatment)
+dds_Gly10_A <- DESeq(dds_Gly10)
+Gly_res <- results(dds_Gly10_A)
+Gly_df_res<-as.data.frame(Gly_res)
+Gly_df_res_tax<-merge(Gly_df_res,taxa, by='row.names')
+colnames(Gly_df_res_tax)[1]<- "ASV#"
+colnames(Gly_df_res_tax)[8] <- "Taxonomy"
+Gly_df_res_tax_o<-Gly_df_res_tax[order(Gly_df_res_tax$padj),]
+Gly_deseq_sig<-Gly_df_res_tax_o %>% filter(padj < 0.05)
+
+#Valine
+dds_Val10 <- DESeqDataSetFromMatrix(countData=df_Val10uM, 
+                              colData=Val10map_o, 
+                              design=~Pair+Treatment)
+dds_Val10_A <- DESeq(dds_Val10)
+Val_res <- results(dds_Val10_A)
+Val_df_res<-as.data.frame(Val_res)
+Val_df_res_tax<-merge(Val_df_res,taxa, by='row.names')
+colnames(Val_df_res_tax)[1]<- "ASV#"
+colnames(Val_df_res_tax)[8] <- "Taxonomy"
+Val_df_res_tax_o<-Val_df_res_tax[order(Val_df_res_tax$padj),]
+Val_deseq_sig<-Val_df_res_tax_o %>% filter(padj < 0.05)
+
+sheets <- list("all10uM"= all5_deseq_sig,"Mix10uM"=Mix_deseq_sig,"Lys10uM"= Lys_deseq_sig, "Pro10M" = Pro_deseq_sig, "Gly10uM"=Gly_deseq_sig,"Phe10uM"=Phe_deseq_sig,"Ile10uM"=Ile_deseq_sig,"Leu10uM"=Leu_deseq_sig, "Val10uM"=Val_deseq_sig)
+write_xlsx(sheets, file.path("Output","DESeq2","all10uM_deseq.xlsx"))
+```
+
+
+#ANCOM-BC
+https://www.bioconductor.org/packages/release/bioc/vignettes/ANCOMBC/inst/doc/ANCOMBC.html
+
+##Separating taxonomic groups 
+```{r}
+tax_sep <- separate(taxa, `taxonomy`, into = c("Domain", "Phylum", "Class", "Order", "Family", "Genus"), sep = ";")
+```
+
+## Eliminating taxon level, characters and spacers
+```{r}
+tax_sep$Domain <- stringr::str_replace(tax_sep$Domain,'[k]', '')
+tax_sep$Domain <- stringr::str_replace_all(tax_sep$Domain,'[__]', '')
+tax_sep$Phylum <- stringr::str_replace(tax_sep$Phylum,'[p__]', '')
+tax_sep$Phylum <- stringr::str_replace_all(tax_sep$Phylum,'[__]', '')
+tax_sep$Class <- stringr::str_replace(tax_sep$Class,'[c__]', '')
+tax_sep$Class <- stringr::str_replace_all(tax_sep$Class,'[__]', '')
+tax_sep$Order <- stringr::str_replace(tax_sep$Order, '[o]', '')
+tax_sep$Order <- stringr::str_replace_all(tax_sep$Order, '[__]', '')
+tax_sep$Family <- stringr::str_replace(tax_sep$Family, '[f]', '')
+tax_sep$Family <- stringr::str_replace_all(tax_sep$Family, '[__]', '')
+tax_sep$Genus <- stringr::str_replace(tax_sep$Genus, '[g]','')
+tax_sep$Genus <- stringr::str_replace_all(tax_sep$Genus, '[__]', '')
+```
+
+#Subsetting Taxa
+```{r}
+all5_t<- as.data.frame(t(all5_df))
+taxID_5<-colnames(all5_t)
+tax_sep_all5<- tax_sep[ (rownames(tax_sep) %in% taxID_5),]
+tax_sep_all5$"ASV#"<-paste(row.names(tax_sep_all5))
+
+Mix10_t<- as.data.frame(t(df_Mix10uM))
+taxID_Mix10<-colnames(Mix10_t)
+tax_sep_Mix10<- tax_sep[ (rownames(tax_sep) %in% taxID_Mix10),]
+tax_sep_Mix10$"ASV#"<-paste(row.names(tax_sep_Mix10))
+
+Lys10_t<- as.data.frame(t(df_Lys10uM))
+taxID_Lys10<-colnames(Lys10_t)
+tax_sep_Lys10<- tax_sep[ (rownames(tax_sep) %in% taxID_Lys10),]
+tax_sep_Lys10$"ASV#"<-paste(row.names(tax_sep_Lys10))
+
+Pro10_t<- as.data.frame(t(df_Pro10uM))
+taxID_Pro10<-colnames(Pro10_t)
+tax_sep_Pro10<- tax_sep[ (rownames(tax_sep) %in% taxID_Pro10),]
+tax_sep_Pro10$"ASV#"<-paste(row.names(tax_sep_Pro10))
+
+Gly10_t<- as.data.frame(t(df_Gly10uM))
+taxID_Gly10<-colnames(Gly10_t)
+tax_sep_Gly10<- tax_sep[ (rownames(tax_sep) %in% taxID_Gly10),]
+tax_sep_Gly10$"ASV#"<-paste(row.names(tax_sep_Gly10))
+
+Phe10_t<- as.data.frame(t(df_Phe10uM))
+taxID_Phe10<-colnames(Phe10_t)
+tax_sep_Phe10<- tax_sep[ (rownames(tax_sep) %in% taxID_Phe10),]
+tax_sep_Phe10$"ASV#"<-paste(row.names(tax_sep_Phe10))
+
+Ile10_t<- as.data.frame(t(df_Ile10uM))
+taxID_Ile10<-colnames(Ile10_t)
+tax_sep_Ile10<- tax_sep[ (rownames(tax_sep) %in% taxID_Ile10),]
+tax_sep_Ile10$"ASV#"<-paste(row.names(tax_sep_Ile10))
+
+Leu10_t<- as.data.frame(t(df_Leu10uM))
+taxID_Leu10<-colnames(Leu10_t)
+tax_sep_Leu10<- tax_sep[ (rownames(tax_sep) %in% taxID_Leu10),]
+tax_sep_Leu10$"ASV#"<-paste(row.names(tax_sep_Leu10))
+
+Val10_t<- as.data.frame(t(df_Val10uM))
+taxID_Val10<-colnames(Val10_t)
+tax_sep_Val10<- tax_sep[ (rownames(tax_sep) %in% taxID_Val10),]
+tax_sep_Val10$"ASV#"<-paste(row.names(tax_sep_Val10))
+```
+
+#Phyloseq objects
+```{r}
+library(phyloseq)
+
+phy_all5 <- phyloseq(
+ otu_table(all5_t,taxa_are_rows = FALSE),
+  sample_data(map_all5_o),
+tax_table(as.matrix(tax_sep_all5)))
+
+phy_Mix10 <- phyloseq(
+ otu_table(Mix10_t,taxa_are_rows = FALSE),
+  sample_data(Mix10map_o),
+tax_table(as.matrix(tax_sep_Mix10)))
+
+phy_Lys10 <- phyloseq(
+ otu_table(Lys10_t,taxa_are_rows = FALSE),
+  sample_data(Lys10map_o),
+tax_table(as.matrix(tax_sep_Lys10)))
+
+phy_Pro10 <- phyloseq(
+ otu_table(Pro10_t,taxa_are_rows = FALSE),
+  sample_data(Pro10map_o),
+tax_table(as.matrix(tax_sep_Pro10)))
+
+phy_Gly10 <- phyloseq(
+ otu_table(Gly10_t,taxa_are_rows = FALSE),
+  sample_data(Gly10map_o),
+tax_table(as.matrix(tax_sep_Gly10)))
+
+phy_Phe10 <- phyloseq(
+ otu_table(Phe10_t,taxa_are_rows = FALSE),
+  sample_data(Phe10map_o),
+tax_table(as.matrix(tax_sep_Phe10)))
+
+phy_Ile10 <- phyloseq(
+ otu_table(Ile10_t,taxa_are_rows = FALSE),
+  sample_data(Ile10map_o),
+tax_table(as.matrix(tax_sep_Ile10)))
+
+phy_Leu10 <- phyloseq(
+ otu_table(Leu10_t,taxa_are_rows = FALSE),
+  sample_data(Leu10map_o),
+tax_table(as.matrix(tax_sep_Leu10)))
+
+phy_Val10 <- phyloseq(
+ otu_table(Val10_t,taxa_are_rows = FALSE),
+  sample_data(Val10map_o),
+tax_table(as.matrix(tax_sep_Val10)))
+
+library(ANCOMBC)
+# Perform ANCOM-BC analysis
+ancombc_all5<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_all5,
+formula = "Treatment+N_Source",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_all5_DA<- ancombc_all5$res$diff_abn
+ancom_all5_padj<- ancombc_all5$res$q_val
+
+ancombc_Mix10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Mix10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Mix10_DA<- ancombc_Mix10$res$diff_abn
+ancom_Mix10_padj<- ancombc_Mix10$res$q_val
+ancom_Mix10_lfc<- ancombc_Mix10$res$lfc
+#ASV 6, 2
+
+ancombc_Lys10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Lys10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Lys10_DA<- ancombc_Lys10$res$diff_abn
+ancom_Lys10_padj<- ancombc_Lys10$res$q_val
+ancom_Lys10_lfc<- ancombc_Lys10$res$lfc
+#ASV 164, 348, 4
+
+ancombc_Pro10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Pro10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Pro10_DA<- ancombc_Pro10$res$diff_abn
+ancom_Pro10_padj<- ancombc_Pro10$res$q_val
+ancom_Pro10_lfc<- ancombc_Pro10$res$lfc
+#ASV NS
+
+ancombc_Gly10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Gly10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Gly10_DA<- ancombc_Gly10$res$diff_abn
+ancom_Gly10_padj<- ancombc_Gly10$res$q_val
+ancom_Gly10_lfc<- ancombc_Gly10$res$lfc
+#ASV NS
+
+ancombc_Phe10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Phe10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Phe10_DA<- ancombc_Phe10$res$diff_abn
+ancom_Phe10_padj<- ancombc_Phe10$res$q_val
+ancom_Phe10_lfc<- ancombc_Phe10$res$lfc
+#ASV 6, 1399 
+
+ancombc_Ile10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Ile10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Ile10_DA<- ancombc_Ile10$res$diff_abn
+ancom_Ile10_padj<- ancombc_Ile10$res$q_val
+ancom_Ile10_lfc<- ancombc_Ile10$res$lfc
+#ASV NS
+
+ancombc_Leu10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Leu10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Leu10_DA<- ancombc_Leu10$res$diff_abn
+ancom_Leu10_padj<- ancombc_Leu10$res$q_val
+ancom_Leu10_lfc<- ancombc_Leu10$res$lfc
+# ASV NS
+
+ancombc_Val10<- ancombc(data=NULL, assay_name = NULL, phyloseq=phy_Val10,
+formula = "Treatment",  
+p_adj_method = "bonferroni",prv_cut = 0.10, lib_cut = 0,
+group = "Pair", struc_zero = TRUE, neg_lb = TRUE, tol = 1e-5,max_iter = 100, conserve = TRUE, alpha = 0.05, global = TRUE,n_cl = 1, verbose = TRUE)
+ancom_Val10_DA<- ancombc_Val10$res$diff_abn
+ancom_Val10_padj<- ancombc_Val10$res$q_val
+ancom_Val10_lfc<- ancombc_Val10$res$lfc
+#ASV NS
+
+```
+
+
+
+

@@ -1,0 +1,194 @@
+---
+title: "4_Stacked_Bars_16S"
+author: "Jessica A. Dozois"
+date: '2023-04-12'
+output: html_document
+---
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,tidyr,ggpubr,ggh4x, reshape2, stringr)
+```
+
+#Creating folders
+```{r Creating folders}
+dir.create(file.path("Output","Stacked_Bars"),recursive = T)
+```
+
+#Importation
+Importing abundance data frame and mapping file.
+```{r Importation}
+ASV_df<-read.table(file=here("Raw_Data","feature_table_filt_combi.tsv"), header=T, sep="\t", comment.char = "", check.names = F) #8703 obs 277 variables
+ASV_df$`#FEATURE_ID` <- paste0("ASV#",ASV_df$`#FEATURE_ID`)
+rownames(ASV_df)<-ASV_df$`#FEATURE_ID` # Feature ID as row names
+ASV_df<-ASV_df[,-1] #removing the Feature Id column
+ASV_df2<-ASV_df[!grepl('Chloroplast', ASV_df$taxonomy),]#8558 obs 276 variables #remove Chloroplasts
+ASV_df3<-ASV_df2[!grepl('Mitochondria', ASV_df2$taxonomy),]##8449 obs 276 variables variables #remove Mitochondria
+ASV_df4<-ASV_df3[!grepl('Eukaryota', ASV_df3$taxonomy),]##8440 obs 276 variables variables #remove Eukaryotes
+
+#Select only samples from the in vitro experiment
+ASV_df5 <- ASV_df4[, !grepl('_L001', names(ASV_df4)), drop = FALSE]
+#8440 obs 171 variables
+#removing taxonomy column
+ASV_df_notaxo <- ASV_df5[,c(1:170)]
+tax<-ASV_df5%>%select("taxonomy")
+#Remove absent taxa
+ASVdf6<-ASV_df_notaxo[!rowSums(ASV_df_notaxo[])==0,] 
+
+# Merge taxonomy data with ASV_df based on common_id
+ASVdf_tax <- merge(ASVdf6, tax, by = "row.names", all.x = TRUE)
+rownames(ASVdf_tax)<-ASVdf_tax$Row.names
+ASVdf_tax<-ASVdf_tax[,-1]
+
+mapping_df<-read.table(file=here("Raw_Data","mapping_file.tsv"), row.names=1, header=T, sep="\t", comment.char = "", check.names = F) #170 obs. 5 variables 
+```
+
+
+#Pre- stacked bar charts steps
+##Separating taxonomic groups 
+```{r}
+taxonomy_16s<-ASVdf_tax%>%select("taxonomy")
+
+tax_sep <- separate(taxonomy_16s, taxonomy, into = c("Domain", "Phylum", "Class", "Order", "Family", "Genus"), sep = ";")
+```
+
+## Eliminating taxon level, characters and spacers
+```{r}
+tax_sep$Domain <- stringr::str_replace(tax_sep$Domain,'[k]', '')
+tax_sep$Domain <- stringr::str_replace_all(tax_sep$Domain,'[__]', '')
+tax_sep$Phylum <- stringr::str_replace(tax_sep$Phylum,'[p__]', '')
+tax_sep$Phylum <- stringr::str_replace_all(tax_sep$Phylum,'[__]', '')
+tax_sep$Class <- stringr::str_replace(tax_sep$Class,'[c__]', '')
+tax_sep$Class <- stringr::str_replace_all(tax_sep$Class,'[__]', '')
+tax_sep$Order <- stringr::str_replace(tax_sep$Order, '[o]', '')
+tax_sep$Order <- stringr::str_replace_all(tax_sep$Order, '[__]', '')
+tax_sep$Family <- stringr::str_replace(tax_sep$Family, '[f]', '')
+tax_sep$Family <- stringr::str_replace_all(tax_sep$Family, '[__]', '')
+tax_sep$Genus <- stringr::str_replace(tax_sep$Genus, '[g]','')
+tax_sep$Genus <- stringr::str_replace_all(tax_sep$Genus, '[__]', '')
+```
+
+## Merging ASVs with clean taxonomy
+```{r}
+ASV_taxo<- merge(ASVdf6, tax_sep, by = "row.names", all.x = TRUE)
+rownames(ASV_taxo)<-ASV_taxo$Row.names
+ASV_taxo<-ASV_taxo[,-1]
+
+View(ASV_taxo[1:10,])
+ASV_taxo$'Family and Genus' <- paste(ASV_taxo$Family,ASV_taxo$Genus)
+Just_Tax<-as.data.frame(ASV_taxo[,177,drop = FALSE])
+rowstax<-row.names(Just_Tax)
+Just_Tax$'ASVs'<-rowstax
+rowstax==Just_Tax$'ASVs' #Sanity check
+Just_Tax["Others",]<-rbind("Others") #Add a row with Others as a ASV and Taxonomy
+
+```
+
+## Preparing abundance matrix
+```{r}
+tax_clean_16s <- ASV_taxo # working file for taxonomy
+com16s_notaxo <- tax_clean_16s[,1:170] # creating an asv table without taxonomy column
+tcom16s_notaxo <- t(com16s_notaxo) # transposing table, samples as rows, species as columns to match metadata
+com16_rel <- (tcom16s_notaxo/rowSums(tcom16s_notaxo)) #Normalization by relative abundance
+(rowSums(com16_rel)) #Sanity check
+```
+
+## Shaping data frame for stack bar charts
+
+```{r}
+# Order mapping file
+dim(mapping_df) #170 5
+mapping16_sorted <-mapping_df[order(row.names(mapping_df)),] # order mappingfile
+rownames(mapping16_sorted) # Check
+rowsmap<-row.names(mapping16_sorted)
+mapping16_sorted$'row.names'<-rowsmap
+row.names(mapping16_sorted)==mapping16_sorted$'row.names' #Sanity check
+
+
+# Order ASV table
+com16_rel_sorted <- com16_rel[order(row.names(com16_rel)),]
+dim(com16_rel_sorted)# 245 208
+rownames(com16_rel_sorted)
+com16_abund <- com16_rel_sorted[,colMeans(com16_rel_sorted) > 0.01]
+dim(com16_abund) # 245  17
+Others<-as.data.frame(1 - rowSums(com16_abund))
+colnames(Others)<-"Others"
+com16_abund_all<-cbind(com16_abund,Others)
+rowscom<-row.names(com16_abund_all)
+com16_abund_all$'ID'<-rowscom
+
+com16_abund_melt<-reshape2::melt(com16_abund_all)
+mapcom16<- cbind(com16_abund_melt, mapping16_sorted)
+mapcom16_tax<- merge(mapcom16, Just_Tax, by.x ="variable", by.y = "ASVs")
+
+```
+
+##Fixing legend order and factor names
+```{r}
+mapcom16_tax$`Family and Genus` <- factor(mapcom16_tax$`Family and Genus`, levels = c("Enterobacteriaceae Citrobacter","Enterobacteriaceae Enterobacter","Enterobacteriaceae Raoultella", "Moraxellaceae Acinetobacter","Pseudomonadaceae Pseudomonas","Others"))
+
+mapcom16_tax <- mapcom16_tax %>%
+  mutate(across(N_Source, str_replace, "mix_17AA", 'Mix 17 AA'))
+
+```
+
+##Subsetting data frame by Dose
+```{r}
+all5_mapcom16<-mapcom16_tax[mapcom16_tax$Dose=="10",]
+single_mapcom16<-mapcom16_tax[mapcom16_tax$Dose=="2",]
+```
+
+#Stack bar charts: mean of relative abundances all 5 miRNAs (10uM)
+```{r}
+#Calculating mean abundances 
+mapcom16_mean_tax_all5<-all5_mapcom16 %>%
+  group_by(N_Source, Treatment,variable,`Family and Genus`) %>%
+  summarise(Mean = mean(value))
+
+mapcom16_mean_tax_all5$MeanPercent <-(mapcom16_mean_tax_all5$Mean)*100
+
+#Stack bar with mean abundances
+stack_mean_all5 <-ggplot(mapcom16_mean_tax_all5, aes(fill =`Family and Genus`, y = MeanPercent, x=Treatment)) +
+geom_bar(stat = "identity") +
+ylab("Relative abundance of taxa (%)") + 
+  xlab("")+
+theme_pubr() +
+scale_fill_manual(values =c("#ffc43d","#f95d6a","#d45087","#2f4b7c","#457b9d","lightgrey"), guide = guide_legend(label.theme = element_text(face = "italic", size = 12))) +
+facet_nested(.~N_Source, scales="free_x",nest_line = TRUE) +
+scale_y_continuous(expand = c(0,0)) +
+scale_x_discrete()+ggtitle("")+
+theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1),strip.background = element_rect(fill="white", size=0, linetype="solid"))+theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 14),legend.title = element_text(size = 12) )+theme(strip.text = element_text(size = 12.5),legend.position = "right")
+stack_mean_all5
+
+
+ggsave(stack_mean_all5,  file = here("Output","Stacked_Bars","Stacked_Bars","Bars_mean_10uM.tiff"), width=32, height=12,units="cm",compression = "lzw")
+saveRDS(stack_mean_all5, file = here("Output","Stacked_Bars","Bars_mean_10uM.rds"))
+
+```
+
+#Stack bar charts: mean of relative abundances exposure to single miRNAs (2uM)
+```{r}
+#Calculating mean abundances 
+mapcom16_mean_tax_single<-single_mapcom16 %>%
+  group_by(N_Source, Treatment,miRNA,variable,`Family and Genus`) %>%
+  summarise(Mean = mean(value))
+mapcom16_mean_tax_single$MeanPercent <- c(mapcom16_mean_tax_single$Mean) *100
+
+#Stack bar with mean abundances
+stack_mean_single <-ggplot(mapcom16_mean_tax_single, aes(fill =`Family and Genus`, y = MeanPercent, x=Treatment)) +
+geom_bar(stat = "identity") +
+ylab("Relative abundance of taxa (%)") + 
+  xlab("")+
+theme_pubr() +
+scale_fill_manual(values =c("#ffc43d","#f95d6a","#d45087","#2f4b7c","#457b9d","lightgrey"), guide = guide_legend(label.theme = element_text(face = "italic", size = 12))) +
+facet_nested(.~N_Source+miRNA, scales="free_x",nest_line = TRUE) +
+scale_y_continuous(expand = c(0,0)) +
+scale_x_discrete()+ ggtitle("")+
+theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1),strip.background = element_rect(fill="white", size=0, linetype="solid"))+theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 14),legend.title = element_text(size = 12) )+theme(strip.text = element_text(size = 12.5),legend.position = "right")
+stack_mean_single
+
+
+ggsave(stack_mean_single,  file = here("Output","Stacked_Bars","Bars_mean_2uM.tiff"), width=32, height=12,units="cm",compression = "lzw")
+saveRDS(stack_mean_single, file = here("Output","Bars_mean_2uM.rds"))
+```
+
