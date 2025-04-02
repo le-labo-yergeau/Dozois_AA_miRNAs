@@ -1,0 +1,124 @@
+---
+title: "3_Germination_test"
+author: "Jessica A. Dozois"
+date: "2025-03-04"
+output: html_document
+---
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix,magick,tiff,grid)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Raw_Data"), recursive=TRUE)
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+```
+
+#Importing data
+```{r Importation}
+df<-read.table(file.path("Raw_Data", "Germination_data.csv"), header=T, sep=",", comment.char = "") # 400 obs 16 variables
+df$Date<-as.factor(df$Date)
+df$Block<-as.factor(df$Block)
+df$Plant<-as.factor(df$Plant)
+df$Isolate<-as.factor(df$Isolate)
+df$Inflorescence<-as.numeric(df$Inflorescence)
+df$Date <- as.numeric(gsub("dpi", "", df$Date))
+df$Isolate <- factor(df$Isolate, levels = c("Acinetobacter", "Chryseobacterium", "Raoultella", "Control"))
+
+```
+
+#Importing image for final figure
+```{r}
+image <- readTIFF(source =  here("Raw_Data", "Arabi_isolates.tif")) #Arabidopsis image
+p_image <- rasterGrob(image, interpolate = TRUE)
+```
+
+
+#Subsetting
+```{r}
+Arabidopsis<-df[df$Plant=="Arabidopsis",] #200 obs 16 variables
+
+#removing rooting column from Arabidopsis
+Arabidopsis$Rooting <- NULL  #200 obs 15 variables
+
+```
+
+#Graphs
+```{r}
+replicate<-5
+custom_breaks_y <- seq(0, 100, by = 20)
+
+#Percentage of cotyledons
+Arabidopsis_mean_cotyledons<-Arabidopsis %>%
+  group_by(Date, Isolate) %>%
+  summarise(Mean = mean(Seedlings_with_cotyledons),sd=sd(Seedlings_with_cotyledons), se = sd / sqrt(replicate))
+Arabidopsis_mean_cotyledons<-Arabidopsis_mean_cotyledons[Arabidopsis_mean_cotyledons$Date <= 6,]
+custom_breaks_x <- seq(3, 6, by = 1)
+Arabidopsis_cotyledons<- ggplot(Arabidopsis_mean_cotyledons, aes(x=Date, y=Mean, colour=Isolate, fill = Isolate)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(0))+
+  geom_line(alpha=0.6,linewidth = 2)+
+  geom_point(position=position_dodge(0), size =3 )+
+  scale_colour_manual(values = c("#277da1","#f8961e","#f94144","#1c3144"))+
+  scale_fill_manual(values = c("white","white","white","white"))+
+  scale_linetype_manual(values = c("solid", "dashed")) +
+  labs(x="Days post-inoculation", y="Percentage of plants \n with cotyledons (%)")+theme_light()+
+  theme(axis.text.x=element_text(size=8))+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks_x) + scale_y_continuous(breaks = custom_breaks_y)
+Arabidopsis_cotyledons
+
+#Percentage of inflorescence
+Arabidopsis_mean_Inflo<-Arabidopsis %>%
+  group_by(Date, Isolate) %>%
+  summarise(Mean = mean(Inflorescence),sd=sd(Inflorescence), se = sd / sqrt(replicate))
+Arabidopsis_mean_Inflo<-Arabidopsis_mean_Inflo[Arabidopsis_mean_Inflo$Date >= 14 & Arabidopsis_mean_Inflo$Date <= 23,]
+custom_breaks_x <- c(14,18,21,23)
+Arabidopsis_Inflo<- ggplot(Arabidopsis_mean_Inflo, aes(x=Date, y=Mean, colour=Isolate, fill=Isolate)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(0))+
+   geom_line(alpha=0.6,linewidth = 2)+
+  geom_point(position=position_dodge(0), size =3 )+
+   scale_colour_manual(values = c("#277da1","#f8961e","#f94144","#1c3144"))+
+  scale_fill_manual(values = c("white","white","white","white"))+
+  scale_linetype_manual(values = c("solid", "dashed")) +
+  labs(x="Days post-inoculation", y="Percentage of plants \n showing inflorescence (%)")+theme_light()+
+  theme(axis.text.x=element_text(size=8))+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks_x) + scale_y_continuous(breaks = custom_breaks_y)
+Arabidopsis_Inflo
+
+```
+
+
+#Fresh weight
+```{r}
+Arabidopsis_fresh<-Arabidopsis[Arabidopsis$Date == 23,]
+
+boxArabidopsis_fresh <- ggplot(Arabidopsis_fresh, aes(x = Isolate, y = Fresh_weight)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Isolate, color = Isolate)) +
+  geom_point(aes(fill = Isolate, color = Isolate), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +ylim(0,1.6)+
+  labs(x = "Endpoint (23 dpi)", y = "Fresh weight (g)") +
+  scale_fill_manual(values = c("#277da1", "#f8961e", "#f94144", "#1c3144")) +
+  scale_colour_manual(values = c("#277da1", "#f8961e", "#f94144", "#1c3144"))+ geom_pwc(
+  aes(group = Isolate), tip.length = 0.01,
+  method = "wilcox_test", label = "{p.adj.signif}",
+  p.adjust.method = "BH",y.position=c(0.9,1.14,1.36),
+  hide.ns = TRUE, label.size=5, size=0.5)
+boxArabidopsis_fresh
+
+```
+
+#Combining figures
+```{r}
+combi1<- ggarrange(Arabidopsis_cotyledons +rremove("legend"), Arabidopsis_Inflo+rremove("legend"),labels = c('A','B'))
+require(grid)
+combi2<-ggarrange(p_image,boxArabidopsis_fresh,labels = c('C','D'))
+combi3<- ggarrange(combi1, combi2,common.legend = T, legend='right', nrow=2)
+
+ggsave(combi3, file=here('Output', 'Figures','Fig_Combi.tiff'), compression='lzw', width=18, height=18, units='cm')
+saveRDS(combi3, file=here('Output','Figures', 'Fig_Arabi_isolates.rds'))
+
+```

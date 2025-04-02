@@ -1,0 +1,125 @@
+---
+title: "2_AUC_germination"
+author: "Marc-Antoine Duchesne & Jessica Dozois"
+date: "2024-11-18"
+output: html_document
+---
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,tidyr,forcats,here,ggpubr,car,rstatix, pracma, purrr, FSA)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Raw_Data"), recursive=TRUE)
+dir.create(file.path("Output", "Stats_AUC"), recursive=TRUE)
+```
+
+#Importing data
+```{r Importation}
+df<-read.table(file.path("Raw_Data", "Germination_data.csv"), header=T, sep=",", comment.char = "") # 400 obs 16 variables
+df$Date<-as.factor(df$Date)
+df$Block<-as.factor(df$Block)
+df$Plant<-as.factor(df$Plant)
+df$Isolate<-as.factor(df$Isolate)
+df$Inflorescence<-as.numeric(df$Inflorescence)
+df$Date <- as.numeric(gsub("dpi", "", df$Date))
+df$Isolate <- factor(df$Isolate, levels = c("Acinetobacter", "Chryseobacterium", "Raoultella", "Control"))
+
+```
+
+#Subsetting
+```{r}
+Arabidopsis<-df[df$Plant=="Arabidopsis",] #200 obs 16 variables
+
+#removing rooting column from Arabidopsis
+Arabidopsis$Rooting <- NULL  #200 obs 15 variables
+
+#subsetting by variables
+
+Ara_coty <-Arabidopsis[, c(1:4, 6)]
+Ara_coty_3_5 <-Ara_coty[Ara_coty$Date <= 5,]
+
+Ara_Inflorescence <- Arabidopsis[, c(1:4, 9)]
+Ara_Inflorescence_14_23 <- Ara_Inflorescence[Ara_Inflorescence$Date >= 14 & Ara_Inflorescence$Date <= 23,]
+```
+
+
+#Calculating AUC for each variable of interest (timepoint adjusted)
+```{r}
+# Define a custom AUC calculation function
+calculate_auc <- function(data, x_col, y_col) {
+  x <- data[[x_col]]  # Date column
+  y <- data[[y_col]]  # Data column
+  trapz(x, y)  # Calculate AUC using trapezoidal rule
+}
+
+#Cotyledons
+# Select columns with data for AUC calculation
+data_cols <- names(Ara_coty_3_5)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_coty <- Ara_coty_3_5 %>%
+  group_by(Isolate, Block) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Date", cur_column()), .names = "AUC_{.col}")
+  )
+# View the result
+print(AUC_coty)
+
+#Inflorescence
+# Select columns with data for AUC calculation
+data_cols <- names(Ara_Inflorescence_14_23)[5]  # Adjust to match your data column range
+# Group by isolate and block
+AUC_Inflorescence <- Ara_Inflorescence_14_23 %>%
+  group_by(Isolate, Block) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Date", cur_column()), .names = "AUC_{.col}")
+  )
+# View the result
+print(AUC_Inflorescence)
+
+```
+
+#Statistics
+```{r}
+#Cotyledons
+
+#Homescedasticity
+leveneTest(AUC_Seedlings_with_cotyledons ~ Isolate, data = AUC_coty) #0.9157
+#Normality
+#We must perform the ANOVA first
+res.aov <- aov(AUC_Seedlings_with_cotyledons ~ Isolate, data = AUC_coty)
+# Extract the residuals
+aov_residuals <- residuals(object = res.aov )
+# Run Shapiro-Wilk test
+shapiro.test(x = aov_residuals ) #W = 0.88362, p-value = 0.02057
+
+#Performing Kruskal Wallis Test instead
+kruskal.test(AUC_Seedlings_with_cotyledons ~ Isolate, data = AUC_coty) # p 0.01027
+dunn_coty <- dunnTest(AUC_Seedlings_with_cotyledons ~ Isolate, data = AUC_coty, method = "bh")
+write.csv(dunn_coty$res, file = here('Output','Stats_AUC','Dunn_Cotyledons.csv'), sep = "\t")
+
+
+
+#Infloresence
+
+#Homescedasticity
+leveneTest(AUC_Inflorescence ~ Isolate, data = AUC_Inflorescence) #0.2717
+#Normality
+#We must perform the ANOVA first
+res.aov <- aov(AUC_Inflorescence ~ Isolate, data = AUC_Inflorescence)
+# Extract the residuals
+aov_residuals <- residuals(object = res.aov )
+# Run Shapiro-Wilk test
+shapiro.test(x = aov_residuals ) #W = 0.88458, p-value = 0.02141
+#ANOVA results
+summary(res.aov) #p-value = 1.2e-06
+
+#Performing Kruskal instead
+kruskal.test(AUC_Inflorescence ~ Isolate, data = AUC_Inflorescence) # p 0.007347
+dunn_Inflo<- dunnTest(AUC_Inflorescence ~ Isolate, data = AUC_Inflorescence, method = "bh")
+write.csv(dunn_Inflo$res, file = here('Output','Stats_AUC','Dunn_Inflorescence.csv'), sep = "\t")
+
+```
+
