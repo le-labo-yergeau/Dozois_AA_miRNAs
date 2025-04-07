@@ -1,7 +1,6 @@
 R code used for data manipulation, statistical analyses and figure generation for the manuscript "Plant miRNAs and amino acids interact to shape soil bacterial communities".
 
-![Graphical_Abstract_AA_miRs_resized](https://github.com/user-attachments/assets/61eedbee-6180-45e9-8e7d-27dcc8ba6af4)
-
+![Graphical_Abstract_AA_miRs](https://github.com/user-attachments/assets/0225b308-9a6e-4e6a-9844-87894c62ad0d)
 
 The codes are structured in three folders: miRNA_statistics, Microbial_statistics and Final_Figures.
 
