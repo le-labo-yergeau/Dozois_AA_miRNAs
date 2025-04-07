@@ -1,0 +1,188 @@
+---
+title: "2_PCA-16SmiRNAs"
+author: "Jessica A. Dozois"
+date: '2023-10-21'
+output: html_document
+---
+
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,tidyr,ggpubr,ggh4x, stringr)
+```
+
+#Creating a folder
+```{r}
+dir.create(file.path("Output","Ordination"),recursive = T)
+```
+
+#Importation
+Importing abundance data frame and mapping file.
+```{r Importation}
+ASV_df<-read.table(file=here("Raw_Data","feature_table_filt_combi.tsv"), header=T, sep="\t", comment.char = "", check.names = F) #8703 obs 277 variables
+ASV_df$`#FEATURE_ID` <- paste0("ASV#",ASV_df$`#FEATURE_ID`)
+rownames(ASV_df)<-ASV_df$`#FEATURE_ID` # Feature ID as row names
+ASV_df<-ASV_df[,-1] #removing the Feature Id column
+colnames(ASV_df)[] <-  sub("_S.*", "", colnames(ASV_df)[]) #simplifying the names of columns
+ASV_df2<-ASV_df[!grepl('Chloroplast', ASV_df$taxonomy),]#8558 obs 276 variables #remove Chloroplasts
+ASV_df3<-ASV_df2[!grepl('Mitochondria', ASV_df2$taxonomy),]##8449 obs 276 variables variables #remove Mitochondria
+ASV_df4<-ASV_df3[!grepl('Eukaryota', ASV_df3$taxonomy),]##8440 obs 276 variables variables #remove Eukaryotes
+
+#Select only samples from the plant experiment
+ASV_df5 <- ASV_df4[, !grepl(c('MI.M'), names(ASV_df4)), drop = FALSE]
+#8440 obs 106 variables
+#removing taxonomy column
+ASV_df_notaxo <- ASV_df5[,c(1:105)]
+tax<-ASV_df5%>%select("taxonomy")
+#Remove absent taxa
+ASVdf6<-ASV_df_notaxo[!rowSums(ASV_df_notaxo[])==0,] # 8348 obs 105 variables
+
+# Merge taxonomy data with ASV_df based on common_id
+ASVdf_tax <- merge(ASVdf6, tax, by = "row.names", all.x = TRUE) 
+rownames(ASVdf_tax)<-ASVdf_tax$Row.names
+ASVdf_tax<-ASVdf_tax[,-1] #8348 obs. 105 variables
+
+mapping_df<-read.table(file=here("Raw_Data","mapping_file.tsv"), row.names=1, header=T, sep="\t", comment.char = "", check.names = F) #105 obs. 5 variables
+
+taxa<-ASVdf_tax%>%select("taxonomy") #8369 obs.
+```
+
+```{r}
+Arabi_map<-mapping_df[mapping_df$Plant=='Arabidopsis',]
+Roots_map<-Arabi_map[Arabi_map$Compartment=='Endosphere',]
+root_samples<-row.names(Roots_map)
+
+Root_ASVs<-ASVdf6 %>% select(names(.)[names(.) %in% root_samples])
+```
+
+#Hellinger transformation and subsetting mix miRNAs
+Hellinger transformation on the abundance data frame. To transform this data it is important to transpose(rotate) the data frame.
+```{r}
+rotate_asv_df_16S <- t(Root_ASVs)
+rotate_asv_df_16S <- decostand(rotate_asv_df_16S, method="hellinger")
+```
+
+#Perform PCA
+Using the function rda() without precising explanatory variables will calculate the principle components. 
+```{r}
+#PCA All 5 mirNAs
+pca.16S_plantexp<-rda (rotate_asv_df_16S )
+#verifying if we can interpret Pc1 and PC2
+rdaaxe2<-rda(rotate_asv_df_16S, pca.16S_plantexp$CA$u[,2],pca.16S_plantexp$CA$u[,1])
+anova(rdaaxe2) # 0.002 ***
+#broken stick model
+screeplot(pca.16S_plantexp, bstick = TRUE, type = "lines")
+
+```
+
+#Extract Principle components
+```{r}
+#Selecting the appropriate scaling
+ii_16S_plantexp<-summary(pca.16S_plantexp)
+scale1_16S_plantexp<-scores(pca.16S_plantexp, choices = 1:2, scaling=1)
+#compiling site scores (scaling 1) 
+stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
+stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
+
+```
+
+#Preparing data frame for ordination
+Here we need to join our explanatory variables and our principle components
+```{r}
+#DF_ordi
+df_16S_plantexp<- merge(stmat1en_16S_plantexp, Roots_map,by = 'row.names')
+
+df_16S_plantexp<-  df_16S_plantexp %>%
+  mutate(across(Nitrogen, str_replace, "No.Added.Nitrogen", 'Low N'))
+
+df_16S_plantexp <- df_16S_plantexp %>%
+  mutate(across(Nitrogen, str_replace, "Amino.Acids", 'AA'))
+
+
+```
+
+#PCA ordination
+```{r}
+
+pca.ordi_16S_plantexp<-ggplot() +
+   geom_point(data = df_16S_plantexp, aes(PC1, PC2), color = "grey70", size = 6.5, stroke = 1) +
+  geom_point(data = df_16S_plantexp,aes(PC1,PC2, color=Nitrogen),size=6, alpha=0.8)+
+  scale_color_manual(values = c("grey30","#f95d6a","#0a2463"))+
+  labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
+       y=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""))+
+theme_classic()
+pca.ordi_16S_plantexp
+pca.ordi_16S_plantexp.2<-pca.ordi_16S_plantexp+theme(legend.text = element_text(size=12))+ theme(axis.title = element_text(size = 13))+
+theme(legend.title = element_text(size=14)) +theme(plot.title = element_text(hjust = 0.5))
+pca.ordi_16S_plantexp.2
+ggsave(pca.ordi_16S_plantexp.2, file=here("Output","Ordination","PCA_root_16S_plantexp.tiff"),units="cm", width=20, height=15, compression='lzw')
+saveRDS(pca.ordi_16S_plantexp.2,file=here("Output","Ordination","PCA_root_16S_plantexp.rds"))
+```
+
+
+
+
+
+
+
+
+# To run the PCA on all samples
+#Hellinger transformation and subsetting mix miRNAs
+Hellinger transformation on the abundance data frame. To transform this data it is important to transpose(rotate) the data frame.
+```{r Hellinger and subsetting}
+rotate_asv_df_16S <- t(ASVdf6)
+rotate_asv_df_16S <- decostand(rotate_asv_df_16S, method="hellinger")
+```
+
+
+#Perform PCA
+Using the function rda() without precising explanatory variables will calculate the principle components. 
+```{r}
+#PCA All 5 mirNAs
+pca.16S_plantexp<-rda (rotate_asv_df_16S )
+#verifying if we can interpret Pc1 and PC2
+rdaaxe2<-rda(rotate_asv_df_16S, pca.16S_plantexp$CA$u[,2],pca.16S_plantexp$CA$u[,1])
+anova(rdaaxe2) # 0.001 ***
+#broken stick model
+screeplot(pca.16S_plantexp, bstick = TRUE, type = "lines")
+
+```
+
+#Extract Principle components
+```{r}
+#Components for the exposure to all 5 miRNAs
+ii_16S_plantexp<-summary(pca.16S_plantexp)
+scale1_16S_plantexp<-scores(pca.16S_plantexp, choices = 1:2, scaling=1)
+#compiling site scores (scaling 1) 
+stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
+stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
+
+```
+
+#Preparing data frame for ordination
+Here we need to join our explanatory variables and our principle components
+```{r}
+#DF_ordi
+df_16S_plantexp<- merge(stmat1en_16S_plantexp, mapping_df,by = 'row.names')
+df_16S_plantexp$'Compartments and plant species' <- paste(df_16S_plantexp$Compartment,df_16S_plantexp$Plant ) # 105 obs. 10 variables
+```
+
+#PCA ordination: exposure to 5 miRNAs
+```{r}
+
+pca.ordi_16S_plantexp<-ggplot() +
+  geom_point(data = df_16S_plantexp,aes(PC1,PC2,shape=Nitrogen,fill=`Compartments and plant species`), color="grey",size=6, stroke=1)+
+  scale_fill_manual(values = c("#FB9A99", "#E31A1C", "#FDBF6F", "#A6CEE3","#1F78B4", "#B2DF8A", "#33A02C"))+
+  scale_shape_manual(values=c(21,22,23))+
+  labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
+       y=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""))+
+  guides(shape=guide_legend(title="miRNA treatment"))+
+  guides(fill = guide_legend(title="Amino acids",override.aes = list(shape = 21)))+
+theme_classic()
+pca.ordi_16S_plantexp
+pca.ordi_16S_plantexp.2<-pca.ordi_16S_plantexp+theme(legend.text = element_text(size=12))+ theme(axis.title = element_text(size = 13))+
+theme(legend.title = element_text(size=14)) +theme(plot.title = element_text(hjust = 0.5))
+pca.ordi_16S_plantexp.2
+ggsave(pca.ordi_16S_plantexp.2, file=here("Output","Ordination","PCA_16S_plantexp.tiff"),units="cm", width=20, height=15, compression='lzw')
+```
+
