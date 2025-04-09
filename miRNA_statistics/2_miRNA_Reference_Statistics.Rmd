@@ -1,0 +1,91 @@
+---
+title: "2_mirNA_Reference_Statistics"
+author: "Jessica A. Dozois"
+date: '2023-01-30'
+output: html_document
+---
+Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,writexl, here)
+```
+#Creating output folder
+```{r}
+dir.create(file.path("Output"),recursive = T)
+```
+
+
+#Importation
+Importing abundance data frame and mapping file.
+```{r}
+#Arabidopsis
+mirdf_RA<- read.table(file.path("Raw_Data","Athaliana_Ref.tsv"), row.names=1, header=T, sep="\t", comment.char = "")# 428 obs. 104
+
+#Importing Mapping file
+mapping<- read.table(file.path("Raw_Data","miRNA_map.tsv"),row.names=1, header=T, sep="\t", comment.char = "") # 104 obs.6 variables
+mapping$Block <- as.character(mapping$Block) # Blocks need to be considered as chr
+```
+
+
+
+#Cleaning Data frame
+Removing all miRNA clusters found in unplanted controls from the abundance data frame.
+```{r Cleaning DF}
+Arabidopsis_map<- mapping[mapping$Plant=="Arabidopsis",]
+
+controls <- c("HI.5212.006.RPI12.7","HI.5212.006.RPI13.8","HI.5212.006.RPI14.9","HI.5212.006.RPI21.16", "HI.5212.006.RPI22.17", "HI.5212.006.RPI23.18", "HI.5212.006.RPI30.25", "HI.5212.006.RPI31.26" , "HI.5212.006.RPI32.27", "HI.5212.007.RPI39.34", "HI.5212.007.RPI40.35", "HI.5212.007.RPI41.36", "HI.5212.007.RPI48.43", "HI.5212.007.RPI1.44", "HI.5212.007.RPI2.45")
+#selecting all miRNAs found in the unplanted soil samples (experimental controls)
+
+#Arabidopsis
+controlsRA<- mirdf_RA[,(names(mirdf_RA) %in% controls)]
+mirRAcontrols<- controlsRA[rowSums(controlsRA[])>0,] #10 obs. 15 variables
+mirRA_noctlrows<- mirdf_RA[!rownames(mirdf_RA) %in% rownames(mirRAcontrols),]#418obs.  104 variables
+mirRA_noctl_clust<-mirRA_noctlrows[,!colnames(mirRA_noctlrows) %in% colnames(mirRAcontrols)]#418 obs. 89 variables
+mirRA_noctl_notaxo<- mirRA_noctl_clust[,colnames(mirRA_noctl_clust) %in% rownames(Arabidopsis_map)] #418 obs 44 variables
+```
+
+#Hellinger transformation
+Hellinger transformation on the abundance data frame. To transform this data it is important to transpose(rotate) the data frame.
+
+```{r Hellinger transformation}
+#All data
+rotate_RA <- t(mirRA_noctl_notaxo)
+rotate_RA <- decostand(rotate_RA, method="hellinger")
+
+#Subset by compartment and plant
+#Endosphere of Arabidopsis
+map_endoarabi<- Arabidopsis_map[Arabidopsis_map$Compartment == "Endosphere", ]
+endoarabi<- row.names(map_endoarabi)
+endoarabi<-mirRA_noctl_notaxo[ , (colnames(mirRA_noctl_notaxo) %in% endoarabi)]#418 obs 15 variables
+rotate_endoarabi <- t(endoarabi)
+rotate_endoarabi <- decostand(rotate_endoarabi, method="hellinger")
+
+```
+
+#PERMANOVAs 
+```{r PERMANOVAs}
+set.seed(11) #fixes the permutation round
+#All data
+#Subset by compartment and plant
+#Endosphere of Arabidopsis
+permanova_endoarabi<- adonis2(rotate_endoarabi~Nitrogen,data=map_endoarabi, groups=Block, permutations = 9999, method="euclidean")
+
+#Add results to an excel workbook
+#Combining row names to each PERMANOVA result data frame
+resendoa <-cbind(" "=rownames(permanova_endoarabi), permanova_endoarabi)
+sheets <- list("permanova_endoarabi"=resendoa)
+write_xlsx(sheets, file.path("Output","miRNA_Reference_PERMANOVA.xlsx"))
+
+```
+
+
+#Analysis of multivariate homogeneity of group dispersions (variances).
+Dispersion must be considered when interpreting PERMANOVA results. 
+```{r Betadisper}
+set.seed(11)
+distmatrix_RA<- vegdist(rotate_endoarabi, method="euclidean")
+nitro_RA<-betadisper(distmatrix_RA, map_endoarabi$Nitrogen)
+permutest(nitro_RA)#0.81
+plot(nitro_RA)
+
+```

@@ -1,0 +1,316 @@
+---
+title: "3_Rel_Abundance_miRNA"
+author: "Jessica A. Dozois"
+date: "2024-05-07"
+output: html_document
+---
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,tidyr,ggpubr,ggh4x, rstatix, stringr,car, FSA)
+```
+
+
+#Creating output folder
+```{r}
+dir.create(file.path("Output"),recursive = T)
+```
+
+
+#Importation
+Importing abundance data frame and mapping file.
+```{r}
+#Arabidopsis
+mirdf_RA<- read.table(file.path("Raw_Data","Athaliana_Ref.tsv"), row.names=1, header=T, sep="\t", comment.char = "")# 428 obs. 104
+
+#Importing Mapping file
+mapping<- read.table(file.path("Raw_Data","miRNA_map.tsv"),row.names=1, header=T, sep="\t", comment.char = "") # 104 obs.6 variables
+mapping$Block <- as.character(mapping$Block) # Blocks need to be considered as chr
+```
+
+
+
+#Cleaning Data frame
+Removing all miRNA clusters found in unplanted controls from the abundance data frame.
+```{r}
+Arabidopsis_map<- mapping[mapping$Plant=="Arabidopsis",]
+
+controls <- c("HI.5212.006.RPI12.7","HI.5212.006.RPI13.8","HI.5212.006.RPI14.9","HI.5212.006.RPI21.16", "HI.5212.006.RPI22.17", "HI.5212.006.RPI23.18", "HI.5212.006.RPI30.25", "HI.5212.006.RPI31.26" , "HI.5212.006.RPI32.27", "HI.5212.007.RPI39.34", "HI.5212.007.RPI40.35", "HI.5212.007.RPI41.36", "HI.5212.007.RPI48.43", "HI.5212.007.RPI1.44", "HI.5212.007.RPI2.45")
+#selecting all miRNAs found in the unplanted soil samples (experimental controls)
+
+#Arabidopsis
+controlsRA<- mirdf_RA[,(names(mirdf_RA) %in% controls)]
+mirRAcontrols<- controlsRA[rowSums(controlsRA[])>0,] #10 obs. 15 variables
+mirRA_noctlrows<- mirdf_RA[!rownames(mirdf_RA) %in% rownames(mirRAcontrols),]#418obs.  104 variables
+mirRA_noctl_clust<-mirRA_noctlrows[,!colnames(mirRA_noctlrows) %in% colnames(mirRAcontrols)]#418 obs. 89 variables
+mirRA_noctl_notaxo<- mirRA_noctl_clust[,colnames(mirRA_noctl_clust) %in% rownames(Arabidopsis_map)] #418 obs 44 variables
+```
+
+#Computing relative abundances of the miRNA
+```{r}
+#Arabidopsis
+miRID_RA<- mirRA_noctl_notaxo # working file for Arabidopsis miRNA
+mirRA_noID <- miRID_RA[,1:44] # creating a table without miRNA_IDs 
+tmirRA_noID<- t(mirRA_noID) # transposing table, samples as rows, miRNAs as columns to match metadata
+mirRA_rel <- (tmirRA_noID/rowSums(tmirRA_noID)) #Normalization by relative abundance
+(rowSums(mirRA_rel)) #Sanity check
+```
+
+## Subsetting for root samples
+```{r}
+mirRA_rel_map<- merge(Arabidopsis_map,mirRA_rel, by = 'row.names', all = TRUE )
+mirRA_rel_root<-mirRA_rel_map[mirRA_rel_map$Compartment=='Endosphere',]
+```
+
+
+
+##Subsetting by miRNAs of interest
+```{r}
+mirRA_interest<- mirRA_rel_root[,c('Nitrogen', 'ath-miR158a-3p_MIMAT0000176','ath-miR158b_MIMAT0001014','ath-miR159a_MIMAT0000177','ath-miR827_MIMAT0004243','ath-miR5642b_MIMAT0022435' )]
+
+RA_abund_melt<-reshape2::melt(mirRA_interest)
+
+
+#making variable names shorter
+RA_abund_melt<-RA_abund_melt %>%
+  mutate(Nitrogen = str_replace(Nitrogen, 'No.Added.Nitrogen', 'No added N'))
+RA_abund_melt<-RA_abund_melt %>%
+  mutate(Nitrogen= str_replace(Nitrogen, 'Amino.Acids', 'AA'))
+levels(RA_abund_melt$variable) <- c("ath-miR158a-3p", "ath-miR158b", "ath-miR159a","ath-miR827","ath-miR5642b")
+names(RA_abund_melt)[2] <- "miRNA"
+names(RA_abund_melt)[3] <- "Relative_abundance"
+
+
+```
+
+
+```{r}
+boxall<- ggplot(RA_abund_melt, aes(x=Nitrogen, y=Relative_abundance*100)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Nitrogen, color=Nitrogen )) +
+  geom_point(aes(fill=Nitrogen, color=Nitrogen),pch = 21, position = position_jitterdodge())+
+  theme_light() +
+  facet_wrap2(vars(miRNA), scales = "free", nrow=1) +
+scale_x_discrete()+
+theme(axis.text.x=element_blank() ,axis.ticks.x = element_blank(),strip.background = element_rect(fill="white", linewidth = 0, linetype="solid"))+
+theme(strip.text = element_text(colour = 'black', size=10))+
+scale_fill_manual(values = c("grey30","#0a2463","#f95d6a"))+
+scale_colour_manual(values = c("grey30","#0a2463","#f95d6a"))
+boxall
+
+boxall_2<-boxall+theme(axis.title.y = element_text(size=14)) +labs(x="", y="Relative abundance of miRNAs (%)")+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12))       
+boxall_2
+```
+
+
+```{r}
+#Computing Kruskal WAllis test
+RA_abund_melt %>%
+  group_by(miRNA) %>% kruskal.test(Relative_abundance,Nitrogen)
+
+#Computing the statistical test
+stat.test <- RA_abund_melt %>%
+  group_by(miRNA) %>%
+  dunn_test(Relative_abundance ~ Nitrogen, p.adjust.method = 'BH') %>%
+  add_significance()
+stat.test
+
+#Adding the coordinates of the p-values
+stat.test.pos<-stat.test %>% add_xy_position(x='Nitrogen', group='miRNA')
+stat.test.pos$y.position <- c(0,0,0,0.0058,0,0,0,0,0,0, 0.05, 0.055,0, 0.009,0)*100
+stat.test.pos$xmin<-c(0,0,0,1,0,0,0,0,0,0, 1, 2, 0, 1, 0)
+stat.test.pos$xmax<-c(0,0,0,2, 0, 0, 0, 0, 0, 0, 3, 3, 0, 3, 0)
+box_sig2<- boxall_2+stat_pvalue_manual(
+    stat.test.pos, hide.ns = TRUE, 
+    label = "p.adj.signif",tip.length = 0, size=6)+scale_y_continuous(labels = scales::number_format(accuracy = 0.01), limits = c(0, NA))
+box_sig2
+ggsave(box_sig2, file=here("Output","Arabidopsis_miRNAs_sig.tiff"),units="cm", width=28, height=10, compression='lzw')
+saveRDS(box_sig2, file = here("Output","Arabidopsis__miRNAs_sig.rds"))
+test<-readRDS(file = here("Output","Arabidopsis__miRNAs_sig.rds"))
+```
+
+#MOST ABUNDANT ROOT miRNAs
+```{r}
+mirRA_ROOT<- mirRA_rel_root[,c('Nitrogen', 'ath-miR165a-3p_MIMAT0000187','ath-miR165b_MIMAT0000188','ath-miR166a-3p_MIMAT0000189','ath-miR166b-3p_MIMAT0000190','ath-miR166d_MIMAT0000192','ath-miR166e-3p_MIMAT0000193','ath-miR166f_MIMAT0000194','ath-miR166g_MIMAT0000195','ath-miR159a_MIMAT0000177','ath-miR160a-3p_MIMAT0031874','ath-miR160b_MIMAT0000179','ath-miR160c-3p_MIMAT0031875','ath-miR159b-3p_MIMAT0000207','ath-miR168a-3p_MIMAT0031884','ath-miR168b-3p_MIMAT0031885','ath-miR158a-3p_MIMAT0000176','ath-miR156b-3p_MIMAT0031866','ath-miR162a-3p_MIMAT0000182','ath-miR162b-3p_MIMAT0000183','ath-miR408-3p_MIMAT0001011' )]
+
+mirRA_ROOT$'miR165ab' <-(mirRA_ROOT$`ath-miR165a-3p_MIMAT0000187` + mirRA_ROOT$`ath-miR165b_MIMAT0000188`)/2
+
+mirRA_ROOT$'miR166abdefg' <- (mirRA_ROOT$`ath-miR166a-3p_MIMAT0000189` + mirRA_ROOT$`ath-miR166b-3p_MIMAT0000190`+ mirRA_ROOT$`ath-miR166d_MIMAT0000192` + mirRA_ROOT$`ath-miR166e-3p_MIMAT0000193` + mirRA_ROOT$`ath-miR166f_MIMAT0000194` + mirRA_ROOT$`ath-miR166g_MIMAT0000195`) / 6
+
+mirRA_ROOT$'miR160abc' <- (mirRA_ROOT$`ath-miR160a-3p_MIMAT0031874` + mirRA_ROOT$`ath-miR160b_MIMAT0000179`+ mirRA_ROOT$`ath-miR160c-3p_MIMAT0031875`) / 3
+
+mirRA_ROOT$'miR168ab' <-(mirRA_ROOT$`ath-miR168a-3p_MIMAT0031884` + mirRA_ROOT$`ath-miR168b-3p_MIMAT0031885`) /2
+
+mirRA_ROOT$'miR162ab'<-(mirRA_ROOT$`ath-miR162a-3p_MIMAT0000182` + mirRA_ROOT$`ath-miR162b-3p_MIMAT0000183`) /2
+
+mirRA_ROOT_clean <- mirRA_ROOT %>% select(-contains(c( 'ath-miR165', 'ath-miR166', 'ath-miR160','ath-miR168', 'ath-miR162')))
+  
+RA_root_melt<-reshape2::melt(mirRA_ROOT_clean)
+
+
+#making variable names shorter
+RA_root_melt<-RA_root_melt %>%
+  mutate(Nitrogen=str_replace(Nitrogen, "No.Added.Nitrogen", 'No added N'))
+RA_root_melt<-RA_root_melt %>%
+  mutate(Nitrogen=str_replace(Nitrogen,"Amino.Acids", 'AA'))
+levels(RA_root_melt$variable) <- c('ath-miR159a', 'ath-miR159b', 'ath-miR158a', 'ath-miR156b', 'ath-miR408', 'ath-miR165ab', 'ath-miR166abdefg', 'ath-miR160abc','ath-miR168ab', 'ath-miR162ab')
+names(RA_root_melt)[2] <- "miRNA"
+names(RA_root_melt)[3] <- "Relative_abundance"
+
+```
+
+
+```{r}
+boxroot<- ggplot(RA_root_melt, aes(x=Nitrogen, y=Relative_abundance*100)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Nitrogen, color=Nitrogen )) +
+  geom_point(aes(fill=Nitrogen, color=Nitrogen),pch = 21, position = position_jitterdodge())+
+  theme_light() +
+  facet_wrap2(vars(miRNA), scales = "free", nrow=2) +
+scale_x_discrete()+
+theme(axis.text.x=element_blank() ,axis.ticks.x = element_blank(),strip.background = element_rect(fill="white", linewidth = 0, linetype="solid"))+
+theme(strip.text = element_text(colour = 'black', size=10))+
+  scale_fill_manual(values = c("grey30","#0a2463","#f95d6a"))+
+scale_colour_manual(values = c("grey30","#0a2463","#f95d6a"))+scale_y_continuous(labels = scales::number_format(accuracy = 0.01), limits = c(0, NA))
+boxroot
+
+boxroot_2<-boxroot+theme(axis.title.y = element_text(size=14)) +labs(x="", y="Relative abundance of most abundant miRNAs (%)")+ theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12))       
+boxroot_2
+```
+
+
+
+```{r}
+#Computing Kruskal WAllis test
+RA_root_melt %>%
+  group_by(miRNA) %>% kruskal.test(Relative_abundance,Nitrogen)
+
+#Computing the statistical test
+stat.test <- RA_root_melt %>%
+  group_by(miRNA) %>%
+  dunn_test(Relative_abundance ~ Nitrogen, p.adjust.method = 'BH') %>%
+  add_significance()
+stat.test
+
+#Adding the coordinates of the p-values
+stat.test.pos<-stat.test %>% add_xy_position(x='Nitrogen', group='miRNA')
+stat.test.pos$y.position<- c(stat.test.pos$y.position)*55
+box_sig_root2<- boxroot_2+stat_pvalue_manual(
+    stat.test.pos, hide.ns = TRUE, 
+    label = "p.adj.signif",tip.length = 0, size=6)+scale_y_continuous(labels = scales::number_format(accuracy = 0.01), limits = c(0, NA))
+box_sig_root2
+ggsave(box_sig_root2, file=here("Output","Arabidopsis_TOP_miRNAs_sig.tiff"),units="cm", width=26, height=16, compression='lzw')
+saveRDS(box_sig_root2,file = here("Output","Arabidopsis_TOP_miRNAs_sig.rds"))
+```
+
+
+##Prepping dataframes for stastical test
+```{r}
+mirRA_rel_rootclean <- mirRA_rel_root[, apply(mirRA_rel_root, 2, function(col) !all(col == 0))]
+miRNA_columns_Ara <- mirRA_rel_rootclean[, colnames(mirRA_rel_rootclean)[c(8:152)]]
+miRNA_columns_Ara <- setdiff(names(miRNA_columns_Ara), "Nitrogen")
+```
+
+```{r}
+# Open a connection to the text file for writing results
+sink(file = here("Output", "Dunn_Ara_miRNAs.txt"), append = FALSE) # Open file for writing (not appending)
+
+# Loop through each miRNA column and perform the tests
+for (miRNA in miRNA_columns_Ara) {
+  # Perform the Kruskal-Wallis test
+  kruskal_test_result <- kruskal.test(mirRA_rel_rootclean[[miRNA]] ~ Nitrogen, data = mirRA_rel_rootclean)
+  
+  # Check if Kruskal-Wallis test is significant
+  if (kruskal_test_result$p.value < 0.05) {
+    # Write the miRNA and Kruskal-Wallis test result to the file
+    cat("\nTesting", miRNA, "\n")
+    cat("Kruskal-Wallis Test Result:\n")
+    print(kruskal_test_result)
+    
+    # Perform Dunn's test
+    dunn_test_result <- dunnTest(mirRA_rel_rootclean[[miRNA]] ~ Nitrogen, data = mirRA_rel_rootclean, method = "bh")
+    
+    # Extract relevant results
+    dunn_results <- dunn_test_result$res
+    if (!is.null(dunn_results)) {
+      # Print Dunn's test results
+      cat("Dunn's Test Result for", miRNA, ":\n")
+      cat(sprintf("%-25s %10s %10s %10s\n", "Comparison", "Z", "P.unadj", "P.adj"))
+      
+      for (i in seq_len(nrow(dunn_results))) {
+        comparison <- dunn_results$Comparison[i]
+        z_value <- format(dunn_results$Z[i], digits = 6)
+        p_unadj <- format(dunn_results$P.unadj[i], digits = 8)
+        p_adj <- format(dunn_results$P.adj[i], digits = 8)
+        cat(sprintf("%-25s %10s %10s %10s\n", comparison, z_value, p_unadj, p_adj))
+      }
+    } else {
+      cat("Dunn's test did not produce any results.\n")
+    }
+  }
+}
+
+# Close the connection to the text file
+sink()
+```
+
+
+##Arabidopsis miRNAs that were significantly affected by N treatment
+```{r}
+mirRA_interest<- mirRA_rel_rootclean[,c('Nitrogen', 'ath-miR158b_MIMAT0001014','ath-miR399b_MIMAT0000952','ath-miR5642b_MIMAT0022435','ath-miR398a-3p_MIMAT0000948','ath-miR390a-3p_MIMAT0031902','ath-miR160a-3p_MIMAT0031874','ath-miR408-3p_MIMAT0001011','ath-miR827_MIMAT0004243','ath-miR166b-5p_MIMAT0031881', 'ath-miR166d_MIMAT0000192',  'ath-miR164c-5p_MIMAT0001017','ath-miR396b-5p_MIMAT0000945','ath-miR399c-3p_MIMAT0000953','ath-miR399c-5p_MIMAT0031913','ath-miR398b-3p_MIMAT0000949','ath-miR398c-3p_MIMAT0000950' )]
+
+
+#'ath-miR398b-3p_MIMAT0000949' and 'ath-miR398c-3p_MIMAT0000950' have the same sequence
+
+mirRA_interest$'miR398bc-3p' <-(mirRA_interest$`ath-miR398b-3p_MIMAT0000949` + mirRA_interest$`ath-miR398c-3p_MIMAT0000950`)/2
+
+
+mirRA_interest <- mirRA_interest %>% select(-contains(c('ath-miR398b','ath-miR398c','ath-miR164c')))#164c removed because dunn test was not significative
+RA_abund_melt<-reshape2::melt(mirRA_interest)
+
+RA_abund_melt<-RA_abund_melt %>%
+  mutate(Nitrogen=str_replace(Nitrogen, "No.Added.Nitrogen", 'No added N'))
+RA_abund_melt<-RA_abund_melt %>%
+  mutate(Nitrogen=str_replace(Nitrogen, "Amino.Acids", 'AA'))
+levels(RA_abund_melt$variable) <- c("ath-miR158b", "ath-miR399b","ath-miR5642b","ath-miR398a-3p","ath-miR390a-3p", "ath-miR160a-3p", "ath-miR408-3p","ath-miR827","ath-miR166b-5p","ath-miR166d","ath-miR396b-5p","ath-miR399c-3p","ath-miR399c-5p","ath-miR398bc-3p" )
+names(RA_abund_melt)[2] <- "miRNA"
+names(RA_abund_melt)[3] <- "Relative_abundance"
+
+```
+
+
+##Boxplot N responding 
+```{r}
+boxall<- ggplot(RA_abund_melt, aes(x=Nitrogen, y=Relative_abundance*100)) +
+    geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Nitrogen, color=Nitrogen )) +
+  geom_point(aes(fill=Nitrogen, color=Nitrogen),pch = 21, position = position_jitterdodge())+
+  theme_light() +
+  facet_wrap2(vars(miRNA), scales = "free", nrow=1) +
+scale_x_discrete()+
+theme(axis.text.x=element_blank() ,axis.ticks.x = element_blank(),strip.background = element_rect(fill="white", linewidth = 0, linetype="solid"))+
+theme(strip.text = element_text(colour = 'black', size=10))+
+scale_fill_manual(values = c("grey30","#0a2463","#f95d6a"))+
+scale_colour_manual(values = c("grey30","#0a2463","#f95d6a"))+
+  theme(axis.title.y = element_text(size=14)) +
+  labs(x="", y="Relative abundance of miRNAs")+
+  theme(legend.title = element_text(size = 14) ,legend.text = element_text(size=12)) +
+  facet_nested_wrap(~miRNA, scales="free_y", nrow=3, nest_line = TRUE)
+boxall
+
+#Computing the statistical test
+stat.test <- RA_abund_melt %>%
+  group_by(miRNA) %>%
+  dunn_test(Relative_abundance ~ Nitrogen, p.adjust.method = 'BH') %>%
+  add_significance()
+stat.test
+
+#adding significative * on boxplot
+stat.test.pos<-stat.test %>% add_xy_position(x='Nitrogen', group='miRNA')
+stat.test.pos$y.position <- c(0.0057,0,0, 0,0,0.006, 0,0.009,0, 0,0,0.0045, 0.0013,0.0015,0, 0,0.003,0, 0,0,0.06, 0,0.055,0.05, 0.016,0.017,0, 0,0,0.03, 0,0,0.013, 0,0,0.0065, 0.0027,0,0.0025,  0,0.04,0.035)*100
+boxall2<- boxall+stat_pvalue_manual(
+    stat.test.pos, hide.ns = TRUE, 
+    label = "p.adj.signif",tip.length = 0, size=6)+scale_y_continuous(labels = scales::number_format(accuracy = 0.01), limits = c(0, NA))
+boxall2
+ggsave(boxall2, file=here("Output","N_responding_miRNAs_Nsig.tiff"),units="cm", width=24, height=23)
+saveRDS(boxall2,file = here("Output","N_responding_miRNAs_sig.rds"))
+```
+
+

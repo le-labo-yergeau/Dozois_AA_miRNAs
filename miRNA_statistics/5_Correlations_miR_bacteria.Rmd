@@ -1,0 +1,783 @@
+---
+title: "5_Correlations_miR_bacteria"
+author: "Jessica A. Dozois"
+date: "2024-05-24"
+output: html_document
+---
+
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,tidyr,ggpubr,ggh4x, rstatix, stringr,car,corrplot, pheatmap, Hmisc, reshape2, cowplot)
+```
+
+
+#Creating output folder
+```{r}
+dir.create(file.path("Output","Correlations"),recursive = T)
+```
+
+
+#Importation miRNA
+Importing abundance data frame and mapping file.
+```{r}
+#Arabidopsis
+mirdf_RA<- read.table(file.path("Raw_Data","Athaliana_Ref.tsv"), row.names=1, header=T, sep="\t", comment.char = "")# 428 obs. 104
+
+#Brachypodium
+mirdf_RB<- read.table(file.path("Raw_Data","Bdistachyon_Ref.tsv"), row.names=1, header=T, sep="\t", comment.char = "")# 524 obs. 104
+
+#Importing Mapping file
+mapping<- read.table(file.path("Raw_Data","miRNA_map.tsv"),row.names=1, header=T, sep="\t", comment.char = "") # 104 obs.6 variables
+mapping$Block <- as.character(mapping$Block) # Blocks need to be considered as chr
+```
+
+
+#Cleaning Data frame miRNA
+Removing all miRNA clusters found in unplanted controls from the abundance data frame.
+```{r}
+Arabidopsis_map<- mapping[mapping$Plant=="Arabidopsis",]
+
+controls <- c("HI.5212.006.RPI12.7","HI.5212.006.RPI13.8","HI.5212.006.RPI14.9","HI.5212.006.RPI21.16", "HI.5212.006.RPI22.17", "HI.5212.006.RPI23.18", "HI.5212.006.RPI30.25", "HI.5212.006.RPI31.26" , "HI.5212.006.RPI32.27", "HI.5212.007.RPI39.34", "HI.5212.007.RPI40.35", "HI.5212.007.RPI41.36", "HI.5212.007.RPI48.43", "HI.5212.007.RPI1.44", "HI.5212.007.RPI2.45")
+#selecting all miRNAs found in the unplanted soil samples (experimental controls)
+
+#Arabidopsis
+controlsRA<- mirdf_RA[,(names(mirdf_RA) %in% controls)]
+mirRAcontrols<- controlsRA[rowSums(controlsRA[])>0,] #10 obs. 15 variables
+mirRA_noctlrows<- mirdf_RA[!rownames(mirdf_RA) %in% rownames(mirRAcontrols),]#418obs.  104 variables
+mirRA_noctl_clust<-mirRA_noctlrows[,!colnames(mirRA_noctlrows) %in% colnames(mirRAcontrols)]#418 obs. 89 variables
+mirRA_noctl_notaxo<- mirRA_noctl_clust[,colnames(mirRA_noctl_clust) %in% rownames(Arabidopsis_map)] #418 obs 44 variables
+```
+
+#Computing relative abundances of the miRNA
+```{r}
+#Arabidopsis
+miRID_RA<- mirRA_noctl_notaxo # working file for Arabidopsis miRNA
+mirRA_noID <- miRID_RA[,1:44] # creating a table without miRNA_IDs 
+tmirRA_noID<- t(mirRA_noID) # transposing table, samples as rows, miRNAs as columns to match metadata
+mirRA_rel <- (tmirRA_noID/rowSums(tmirRA_noID)) #Normalization by relative abundance
+(rowSums(mirRA_rel)) #Sanity check
+```
+
+## Subsetting for root miRNA samples
+```{r}
+
+mirRA_rel_map<- merge(Arabidopsis_map,mirRA_rel, by = 'row.names', all = TRUE )
+mirRA_rel_root<-mirRA_rel_map[mirRA_rel_map$Compartment=='Endosphere',]
+```
+
+
+#Importation 16S data
+Importing abundance data frame and mapping file.
+```{r Importation}
+ASV_df<-read.table(file=here("Raw_Data","feature_table_filt_combi.tsv"), header=T, sep="\t", comment.char = "", check.names = F) #8703 obs 277 variables
+ASV_df$`#FEATURE_ID` <- paste0("ASV#",ASV_df$`#FEATURE_ID`)
+rownames(ASV_df)<-ASV_df$`#FEATURE_ID` # Feature ID as row names
+ASV_df<-ASV_df[,-1] #removing the Feature Id column
+colnames(ASV_df)[] <-  sub("_S.*", "", colnames(ASV_df)[]) #simplifying the names of columns
+ASV_df2<-ASV_df[!grepl('Chloroplast', ASV_df$taxonomy),]#8558 obs 276 variables #remove Chloroplasts
+ASV_df3<-ASV_df2[!grepl('Mitochondria', ASV_df2$taxonomy),]##8449 obs 276 variables variables #remove Mitochondria
+ASV_df4<-ASV_df3[!grepl('Eukaryota', ASV_df3$taxonomy),]##8440 obs 276 variables variables #remove Eukaryotes
+
+#Select only samples from the plant experiment
+ASV_df5 <- ASV_df4[, !grepl(c('MI.M'), names(ASV_df4)), drop = FALSE]
+#8440 obs 106 variables
+#removing taxonomy column
+ASV_df_notaxo <- ASV_df5[,c(1:105)]
+tax<-ASV_df5%>%select("taxonomy")
+#Remove absent taxa
+ASVdf6<-ASV_df_notaxo[!rowSums(ASV_df_notaxo[])==0,] # 8348 obs 105 variables
+
+# Merge taxonomy data with ASV_df based on common_id
+ASVdf_tax <- merge(ASVdf6, tax, by = "row.names", all.x = TRUE) 
+rownames(ASVdf_tax)<-ASVdf_tax$Row.names
+ASVdf_tax<-ASVdf_tax[,-1] #8348 obs. 105 variables
+
+mapping_df<-read.table(file=here("Raw_Data","mapping_file_16S.tsv"), row.names=1, header=T, sep="\t", comment.char = "", check.names = F) #105 obs. 5 variables
+
+taxa<-ASVdf_tax%>%select("taxonomy") #8369 obs.
+```
+
+## Preparing 16S abundance matrix
+```{r}
+ASV_df_notaxo_t <- t(ASV_df_notaxo) # transposing table, samples as rows, species as columns to match metadata
+com16_rel <- (ASV_df_notaxo_t/rowSums(ASV_df_notaxo_t)) #Normalization by relative abundance
+(rowSums(com16_rel)) #Sanity check
+
+#Subsetting for root samples
+com16_rel_map<- merge(mapping_df,com16_rel, by = 'row.names', all = TRUE )
+com16_rel_root<- com16_rel_map[com16_rel_map$Compartment=='Endosphere',]
+com16_rel_rootA<-com16_rel_root[com16_rel_root$Plant=='Arabidopsis',]
+```
+
+#Combine
+```{r}
+#Combing miRNA abundance and 16S abundance in a single data frame
+Arabi_miR_16S<- merge(com16_rel_rootA, mirRA_rel_root, by='Treatment', all=TRUE)
+empty_colA <- colSums(Arabi_miR_16S==0)
+non_numeric_colA <- sapply(Arabi_miR_16S, function(x) !is.numeric(x))
+Arabi_miR_16S_clean<-Arabi_miR_16S[ ,!(empty_colA) | non_numeric_colA]
+non_numeric_colA2 <- sapply(Arabi_miR_16S_clean, function(x) !is.numeric(x))
+Arabi_miR_16S_reordered<- Arabi_miR_16S_clean[, c(which(non_numeric_colA2), which(!non_numeric_colA2))]
+```
+
+#Spearman heat maps
+##Arabidopsis- Spearman correlation
+```{r}
+#Separating ASV and miRNA and removing the qualitative data
+Ara_16S_reo <- Arabi_miR_16S_reordered[, colnames(Arabi_miR_16S_reordered)[c(13:48)]] #Warning : made by hand
+Ara_miR_reo <- Arabi_miR_16S_reordered[, colnames(Arabi_miR_16S_reordered)[c(49:90)]]
+
+#Renaming miRNAs
+colnames(Ara_miR_reo) <- sapply(strsplit(colnames(Ara_miR_reo), "_"), `[`, 1)
+
+# Combining the two matrices side by side to use rcorr
+Acombined_data <- cbind(Ara_miR_reo, Ara_16S_reo)
+
+# Computing correlations and p-values using Hmisc::rcorr
+Acor_results <- rcorr(as.matrix(Acombined_data), type="spearman")
+
+# Extracting correlation coefficients and p-values
+Acor_matrix <- Acor_results$r
+Apval_matrix <- Acor_results$P
+
+# Defining the number of miRNAs and bacteria
+Anum_molecules <- ncol(Ara_miR_reo)
+Anum_bacteria <- ncol(Ara_16S_reo)
+
+# The correlations between miRNAs and bacteria are in the off-diagonal blocks
+Acor_matrix <- Acor_matrix[1:Anum_molecules, (Anum_molecules+1):(Anum_molecules+Anum_bacteria)]
+Apval_matrix <- Apval_matrix[1:Anum_molecules, (Anum_molecules+1):(Anum_molecules+Anum_bacteria)]
+
+# Adjusting p-values for multiple comparisons
+Apval_adjusted <- p.adjust(as.vector(Apval_matrix), method="none") #warning : to visualize, we removed the adjusment
+Apval_adjusted <- matrix(Apval_adjusted, nrow=Anum_molecules, ncol=Anum_bacteria)
+
+# Filter correlations to include only significant ones (p.adjust <= 0.05)
+Asignificant_correlations <- Acor_matrix
+Asignificant_correlations[Apval_adjusted > 0.05] <- NA
+
+#removing row and colums with no significative correlations
+Asignificant_correlations <- Asignificant_correlations[rowSums(is.na(Asignificant_correlations)) != ncol(Asignificant_correlations), ]
+Asignificant_correlations <- Asignificant_correlations[, colSums(is.na(Asignificant_correlations)) != nrow(Asignificant_correlations)]
+
+# Note: pheatmap cannot handle NA values, so they are replaced by a small value for visualization. 
+#Note MAD : this is not true
+#significant_correlations[is.na(significant_correlations)] <- 0  # Replace NA with a very small value
+pheatmap(Asignificant_correlations, 
+         cluster_rows = F, cluster_cols = F, fontsize = 6,
+         main = "Significant Correlations Heatmap",
+         na_col = "white")  # Optionally set a color for NA values in pheatmap
+
+```
+
+###adjusting pheatmap + saving
+```{r}
+# Define a custom color palette
+custom_colors <- colorRampPalette(c("#a4133c","#ff758f", "white", "#a3cef1","#003049"))(2000)
+
+# Create the heatmap with custom colors and theme
+heat_Ara <- pheatmap(Asignificant_correlations, 
+         cluster_rows = F, 
+         cluster_cols = F, 
+         display_numbers = F,
+         color = custom_colors,
+         border_color = "lightgrey",  # Remove the border for a cleaner look
+         cellwidth = 30, 
+         cellheight = 15,
+         main = "Significant correlations between bacterial ASVs and Arabidopsis miRNAs",
+         na_col = "white")
+
+ggsave(heat_Ara, file = here("Output","Correlations","Heatmap_Aridop.jpg"), width = 50, height = 25, units = "cm" ) 
+
+```
+
+#Correlations between ASVs and miRNAs
+```{r}
+#ASV#630 and ath-miR827
+
+#ASV630 = k__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;o__Enterobacterales;f__Colwelliaceae;g__Litorilituus;
+#Extract the ASV data and miRNA
+Asv630v827 <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_630 = Arabi_miR_16S_reordered$"ASV#630",
+  ath_miR827 = Arabi_miR_16S_reordered$"ath-miR827_MIMAT0004243")
+
+#Compute correlation
+Asv630v827_test <- cor.test(Asv630v827$ASV_630, Asv630v827$ath_miR827, method = "spearman")
+
+# Print the results
+print(Asv630v827_test)
+
+Asv630v827_plot <- ggplot(data = Asv630v827, aes(x = ASV_630, y = ath_miR827 )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman") + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Litorilituus relative abundance (ASV#630)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+
+```
+
+```{r}
+#Correlation between ASV#478 and ath-miR827
+#k__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;o__Burkholderiales;f__Oxalobacteraceae;g__Massilia;
+
+#Extract the ASV data and miRNA
+Asv478v827 <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_478 = Arabi_miR_16S_reordered$"ASV#478",
+  ath_miR827 = Arabi_miR_16S_reordered$"ath-miR827_MIMAT0004243")
+
+#Compute correlation
+Asv478v827_test <- cor.test(Asv478v827$ASV_478, Asv478v827$ath_miR827, method = "spearman")
+
+# Print the results
+print(Asv478v827_test)
+
+Asv478v827_plot <- ggplot(data = Asv478v827, aes(x = ASV_478, y = ath_miR827 )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman", label.y=0.05) + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Massilia relative abundance (ASV#478)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv478v827_plot)
+
+```
+
+
+```{r}
+#Correlation between ASV#111 and ath-miR827
+#k__Bacteria;p__Chloroflexi;c__Ktedonobacteria;o__C0119;f__C0119OR;g__C0119OR;
+# Extract the ASV data and miRNA
+
+Asv111v827 <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_111 = Arabi_miR_16S_reordered$"ASV#111",
+  ath_miR827 = Arabi_miR_16S_reordered$"ath-miR827_MIMAT0004243")
+
+#Compute correlation
+Asv111v827_test <- cor.test(Asv111v827$ASV_111, Asv111v827$ath_miR827, method = "spearman")
+
+# Print the results
+print(Asv111v827_test)
+
+Asv111v827_plot <- ggplot(data = Asv111v827, aes(x = ASV_111, y = ath_miR827 )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman") + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Ktedonobacteria relative abundance (ASV#111)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv111v827_plot)
+
+```
+
+
+```{r}
+#Correlation between ASV#41 and ath-miR827
+#k__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;o__Xanthomonadales;f__Xanthomonadaceae;g__Luteimonas;
+
+#Extract the ASV data and miRNA
+Asv41v827 <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_41 = Arabi_miR_16S_reordered$"ASV#41",
+  ath_miR827 = Arabi_miR_16S_reordered$"ath-miR827_MIMAT0004243")
+
+#Compute correlation
+Asv41v827_test <- cor.test(Asv41v827$ASV_41, Asv41v827$ath_miR827, method = "spearman")
+
+# Print the results
+print(Asv41v827_test)
+
+Asv41v827_plot <- ggplot(data = Asv41v827, aes(x = ASV_41, y = ath_miR827 )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman") + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Luteimonas relative abundance (ASV#41)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv41v827_plot)
+
+```
+
+```{r}
+#Correlation between ASV#14 and ath-miR827
+#k__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;o__Burkholderiales;f__Oxalobacteraceae;g__Massilia;
+
+#Extract the ASV data and miRNA
+Asv14v827 <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_14 = Arabi_miR_16S_reordered$"ASV#14",
+  ath_miR827 = Arabi_miR_16S_reordered$"ath-miR827_MIMAT0004243")
+
+#Compute correlation
+Asv14v827_test <- cor.test(Asv14v827$ASV_14, Asv14v827$ath_miR827, method = "spearman")
+
+# Print the results
+print(Asv14v827_test)
+
+Asv14v827_plot <- ggplot(data = Asv14v827, aes(x = ASV_14, y = ath_miR827 )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman") + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Massilia relative abundance (ASV#14)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv14v827_plot)
+```
+
+
+```{r}
+#ath-miR827 combined plot
+#make legend bigger beforehand
+Asv14v827_plot <- Asv14v827_plot + theme(legend.text = element_text (size = 20))
+print(Asv14v827_plot)
+                                         
+legend <- get_legend(Asv14v827_plot)
+
+# Create an empty plot p3
+empty_plot <- ggplot() + theme_void()
+# Combine the empty plot with the legend
+combined_plot <- plot_grid(empty_plot, legend, ncol = 1, rel_heights = c(1, 0.2))
+legend <- get_legend(Asv14v827_plot)
+
+# Create an empty plot with bigger size
+empty_plot <- ggplot() + theme_void() + theme(plot.margin = margin(20, 20, 20, 20, "cm"))
+
+# Combine the empty plot with the legend
+p3 <- plot_grid(empty_plot, legend, ncol = 1, rel_heights = c(0, 20))
+#combined_plot <-combined_plot + theme(legend.position = 0.5,0.5 )
+
+# Print the combined plot
+print(p3)
+
+#removing legend 
+Asv14v827_plot1 <- Asv14v827_plot + theme(legend.position = "none")
+Asv41v827_plot1 <- Asv41v827_plot + theme(legend.position = "none")
+Asv111v827_plot1 <-Asv111v827_plot+ theme(legend.position = "none")
+Asv478v827_plot1 <-Asv478v827_plot+ theme(legend.position = "none")
+Asv630v827_plot1 <- Asv630v827_plot+ theme(legend.position = "none")
+
+
+all_athmiR827_ara <- ggarrange (Asv14v827_plot1,Asv41v827_plot1,Asv111v827_plot1,Asv478v827_plot1, Asv630v827_plot1, p3)
+
+
+print (all_athmiR827_ara)
+all_athmiR827_ara<-annotate_figure(all_athmiR827_ara, left = text_grob("ath-miR827 relative abondance", size =10, rot = 90))
+print(all_athmiR827_ara)
+
+```
+
+
+```{r}
+#Correlation between ASV#67 and ath-miR158a3p
+#k__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Chitinophagales;f__Chitinophagaceae;g__Niastella;
+
+#Extract the ASV data and miRNA
+Asv67v158a3p <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_67 = Arabi_miR_16S_reordered$"ASV#67",
+  ath_miR158a3p = Arabi_miR_16S_reordered$"ath-miR158a-3p_MIMAT0000176")
+
+#Compute correlation
+Asv67v158a3p_test <- cor.test(Asv67v158a3p$ASV_67, Asv67v158a3p$ath_miR158a3p, method = "spearman")
+
+# Print the results
+print(Asv67v158a3p_test)
+
+Asv67v158a3p_plot <- ggplot(data = Asv67v158a3p, aes(x = ASV_67, y = ath_miR158a3p )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman",label.y = 0.12 ) + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N")) +   labs(x = "Niastella relative abundance (ASV#67)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv67v158a3p_plot)
+ 
+```
+
+
+```{r}
+#Correlation between ASV#111 and ath-miR158a3p
+#k__Bacteria;p__Chloroflexi;c__Ktedonobacteria;o__C0119;f__C0119OR;g__C0119OR;
+
+#Extract the ASV data and miRNA
+Asv111v158a3p <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_111 = Arabi_miR_16S_reordered$"ASV#111",
+  ath_miR158a3p = Arabi_miR_16S_reordered$"ath-miR158a-3p_MIMAT0000176")
+
+#Compute correlation
+Asv111v158a3p_test <- cor.test(Asv111v158a3p$ASV_111, Asv111v158a3p$ath_miR158a3p, method = "spearman")
+
+# Print the results
+print(Asv111v158a3p_test)
+
+Asv111v158a3p_plot <- ggplot(data = Asv111v158a3p, aes(x = ASV_111, y = ath_miR158a3p )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman",label.y = 0.12 ) + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Ktedonobacteria relative abundance (ASV#111)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv111v158a3p_plot)
+ggsave(Asv111v158a3p_plot, file = here("Output", "Figures","ASV111vsmiR158a3p.jpg"), width = 20, height = 15, units = "cm" ) 
+```
+
+
+```{r}
+#Correlation between ASV#630 and ath-miR158a3p
+#ASV630 = k__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;o__Enterobacterales;f__Colwelliaceae;g__Litorilituus;
+
+#Extract the ASV data and miRNA
+Asv630v158a3p <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_630 = Arabi_miR_16S_reordered$"ASV#630",
+  ath_miR158a3p = Arabi_miR_16S_reordered$"ath-miR158a-3p_MIMAT0000176")
+
+#Compute correlation
+Asv630v158a3p_test <- cor.test(Asv630v158a3p$ASV_630, Asv630v158a3p$ath_miR158a3p, method = "spearman")
+
+# Print the results
+print(Asv630v158a3p_test)
+
+Asv630v158a3p_plot <- ggplot(data = Asv630v158a3p, aes(x = ASV_630, y = ath_miR158a3p )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman",label.y = 0.12 ) + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Litorilituus relative abundance (ASV#630)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv630v158a3p_plot)
+
+```
+
+
+```{r}
+#ath-miR158a3p combined plot
+#must run previous chunk to get the empty plot with legend
+
+#removing legend 
+Asv67v158a3p_plot1 <- Asv67v158a3p_plot + theme(legend.position = "none")
+Asv111v158a3p_plot1 <- Asv111v158a3p_plot + theme(legend.position = "none")
+Asv630v158a3p_plot1 <-Asv630v158a3p_plot+ theme(legend.position = "")
+
+
+all_athmiR158a3p_ara <- ggarrange (Asv67v158a3p_plot1,Asv111v158a3p_plot1,Asv630v158a3p_plot1, ncol = 3, common.legend = T, align = "hv",
+  legend = "right")
+
+
+print (all_athmiR158a3p_ara)
+
+all_athmiR158a3p_ara<-annotate_figure(all_athmiR158a3p_ara, left = text_grob("ath-miR158a-3p relative abondance", size =10, rot = 90))
+print(all_athmiR158a3p_ara)
+
+```
+
+
+```{r}
+#Correlation between ASV#53 and ath-miR159a
+#k__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Chitinophagales;f__Chitinophagaceae;g__Flavitalea;
+
+#Extract the ASV data and miRNA
+Asv53v159a <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_53 = Arabi_miR_16S_reordered$"ASV#53",
+  ath_miR159a = Arabi_miR_16S_reordered$"ath-miR159a_MIMAT0000177")
+
+#Compute correlation
+Asv53v159a_test <- cor.test(Asv53v159a$ASV_53, Asv53v159a$ath_miR159a, method = "spearman")
+
+# Print the results
+print(Asv53v159a_test)
+
+Asv53v159a_plot <- ggplot(data = Asv53v159a, aes(x = ASV_53, y = ath_miR159a )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman",label.y = 0.17 ) + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Flavitalea relative abundance (ASV#53)", y = "ath-miR159a relative abondance", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv53v159a_plot)
+```
+
+
+```{r}
+#Correlation between ASV#14 and ath-miR5642b
+#k__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;o__Burkholderiales;f__Oxalobacteraceae;g__Massilia;
+
+#Extract the ASV data and miRNA
+Asv14v5642b <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_14 = Arabi_miR_16S_reordered$"ASV#14",
+  ath_miR5642b = Arabi_miR_16S_reordered$"ath-miR5642b_MIMAT0022435")
+
+#Compute correlation
+Asv14v5642b_test <- cor.test(Asv14v5642b$ASV_14, Asv14v5642b$ath_miR5642b, method = "spearman")
+
+# Print the results
+print(Asv14v5642b_test)
+
+Asv14v5642b_plot <- ggplot(data = Asv14v5642b, aes(x = ASV_14, y = ath_miR5642b )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman") + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Massilia relative abundance (ASV#14)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv14v5642b_plot)
+```
+
+
+```{r}
+#Correlation between ASV#98 and ath-miR5642b
+#k__Bacteria;p__Proteobacteria;c__Alphaproteobacteria;o__Rhizobiales;f__Rhizobiaceae;g__Allorhizobium-Neorhizobium-Pararhizobium-Rhizobium;
+
+#Extract the ASV data and miRNA
+Asv98v5642b <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_98 = Arabi_miR_16S_reordered$"ASV#98",
+  ath_miR5642b = Arabi_miR_16S_reordered$"ath-miR5642b_MIMAT0022435")
+
+#Compute correlation
+Asv98v5642b_test <- cor.test(Asv98v5642b$ASV_98, Asv98v5642b$ath_miR5642b, method = "spearman")
+
+# Print the results
+print(Asv98v5642b_test)
+
+Asv98v5642b_plot <- ggplot(data = Asv98v5642b, aes(x = ASV_98, y = ath_miR5642b )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman", label.y = 0.010) + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Rhizobiaceae relative abundance (ASV#98)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv98v5642b_plot)
+```
+
+
+```{r}
+#Correlation between ASV#478 and ath-miR5642b
+#k__Bacteria;p__Proteobacteria;c__Gammaproteobacteria;o__Burkholderiales;f__Oxalobacteraceae;g__Massilia;
+#Extract the ASV data and miRNA
+
+Asv478v5642b <- data.frame(
+  Treatment = Arabi_miR_16S_reordered$Treatment,
+  Nitrogen.x = Arabi_miR_16S_reordered$Nitrogen.x,
+  ASV_478 = Arabi_miR_16S_reordered$"ASV#478",
+  ath_miR5642b = Arabi_miR_16S_reordered$"ath-miR5642b_MIMAT0022435")
+
+#Compute correlation
+Asv478v5642b_test <- cor.test(Asv478v5642b$ASV_478, Asv478v5642b$ath_miR5642b, method = "spearman")
+
+# Print the results
+print(Asv478v5642b_test)
+
+Asv478v5642b_plot <- ggplot(data = Asv478v5642b, aes(x = ASV_478, y = ath_miR5642b )) +
+  geom_smooth(method = "lm", se = T, color = "black", fill = "#e9ecef")+
+  geom_point(aes(fill =Nitrogen.x), shape = 21, size = 4.5) +
+  stat_cor(method = "spearman", label.y=0.009) + scale_fill_manual(values = c("grey60","#0A2463","#F95D6A"), labels = c("AA", "NH4NO3", "No added N"))  +  
+  labs(x = "Massilia relative abundance (ASV#478)", y = "", title = "") +theme_bw() + theme(legend.title = element_blank())
+print(Asv478v5642b_plot)
+```
+
+
+```{r}
+#ath-miR5642b combined plot
+#must run previous chunk to get the empty plot with legend
+#removing legend 
+Asv14v5642b_plot1 <- Asv14v5642b_plot + theme(legend.position = "none")
+Asv98v5642b_plot1 <- Asv98v5642b_plot + theme(legend.position = "none")
+Asv478v5642b_plot1 <- Asv478v5642b_plot + theme(legend.position = "")
+
+all_athmiR5642b_ara <- ggarrange (Asv14v5642b_plot1,Asv98v5642b_plot1,Asv478v5642b_plot1, ncol = 3, common.legend = T, align = "hv",
+  legend = "right")
+
+
+print (all_athmiR5642b_ara)
+
+all_athmiR5642b_ara<-annotate_figure(all_athmiR5642b_ara, left = text_grob("ath-miR5642b relative abondance", size =10, rot = 90))
+print(all_athmiR5642b_ara)
+
+```
+
+#Combining all plots
+```{r}
+#Adding y label
+Asv53v159a_plot <- Asv53v159a_plot + labs(y = "ath-miR159a")
+Asv14v827_plot1 <-Asv14v827_plot + labs(y = "ath-miR827")
+Asv41v827_plot1 <-Asv41v827_plot1+ labs(y = "ath-miR827")
+Asv111v827_plot1 <-Asv111v827_plot1+ labs(y = "ath-miR827")
+Asv478v827_plot1 <-Asv478v827_plot1+ labs(y = "ath-miR827")
+Asv630v827_plot1 <-Asv630v827_plot1+ labs(y = "ath-miR827")
+Asv67v158a3p_plot1<-Asv67v158a3p_plot1+ labs(y = "ath-miR158a-3p")
+Asv111v158a3p_plot1<-Asv111v158a3p_plot1+ labs(y = "ath-miR158a-3p")
+Asv630v158a3p_plot1<-Asv630v158a3p_plot1+ labs(y = "ath-miR158a-3p")
+Asv14v5642b_plot1 <-Asv14v5642b_plot1+ labs(y = "ath-miR5642b")
+Asv98v5642b_plot1<-Asv98v5642b_plot1+ labs(y = "ath-miR5642b")
+Asv478v5642b_plot1<-Asv478v5642b_plot1+ labs(y = "ath-miR5642b")
+
+
+#combining miR827 with miR159 for aesthetic
+Asv14v827_plot2 <- Asv14v827_plot1 +theme(legend.text = element_text(size = 12))
+Asv53v159a_plot2 <- Asv53v159a_plot + theme(legend.position = "none")
+
+miR827_159 <- ggarrange (Asv14v827_plot2,Asv41v827_plot1,Asv111v827_plot1,Asv478v827_plot1, Asv630v827_plot1,Asv53v159a_plot2, common.legend = T )
+miR827_159 <- annotate_figure(miR827_159, left = text_grob("", size =12, rot = 90))
+miR827_159 
+
+#removing legends
+miR158 <-ggarrange(Asv67v158a3p_plot1,Asv111v158a3p_plot1,Asv630v158a3p_plot1, common.legend = F, ncol = 3)
+miR158 <- annotate_figure(miR158, left = text_grob("", size =12, rot = 90))
+miR158
+
+miR5642b <- ggarrange(Asv14v5642b_plot1,Asv98v5642b_plot1,Asv478v5642b_plot1, ncol = 3, common.legend = F)
+miR5642b<-annotate_figure(miR5642b, left = text_grob("", size =12, rot = 90))
+miR5642b
+
+  
+all1 <- ggarrange(miR827_159,miR158,miR5642b , common.legend = T, ncol =1, align = "hv",heights = c(2,1,1))
+all1
+
+all <- annotate_figure(all1, left = text_grob("Relative abundance of root miRNAs", size =14, rot = 90))
+ggsave(all, file = here("Output", "Correlations","All_asv_vs_miRAra.tiff"), width = 30, height = 35, units = "cm")
+saveRDS(all,file = here("Output","Correlations","All_asv_vs_miRAra.rds"))
+```
+
+
+#Linear regression models with N
+```{r}
+#For more information about assumptions reqquired to perform and interpret linear regression models, please consult
+#http://www.sthda.com/english/articles/39-regression-model-diagnostics/161-linear-regression-assumptions-and-diagnostics-in-r-essentials/
+
+#158a_3p
+model158a_67<-lm(`ASV#67` ~ `ath-miR158a-3p_MIMAT0000176`+Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model158a_67)#*
+Anova(model158a_67) # to extract ANOVA table from the model
+#Assumptions
+par(mfrow = c(2, 2))
+plot(model158a_67)
+ncvTest(model158a_67)# NOT OK, but the scale-location plot is ok
+#normality assumption
+shapiro.test(residuals(model158a_67)) #OK
+
+model158a_111<-lm(`ASV#111` ~ `ath-miR158a-3p_MIMAT0000176`+Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model158a_111) #ns
+
+model158a_630<-lm(`ASV#630` ~ `ath-miR158a-3p_MIMAT0000176`+ Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model158a_630) #ns
+
+#159
+model159_53 <- lm(`ASV#53` ~ `ath-miR159a_MIMAT0000177`+ Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model159_53) #ns
+
+#827
+model827_14 <- lm(`ASV#14` ~ `ath-miR827_MIMAT0004243`+ Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model827_14) #*
+Anova(model827_14) # to extract ANOVA table from the model
+#Assumptions
+par(mfrow = c(2, 2))
+plot(model827_14)
+ncvTest(model827_14)#OK
+#normality assumption
+shapiro.test(residuals(model827_14)) #OK
+
+model827_41 <- lm(`ASV#41` ~ `ath-miR827_MIMAT0004243`+ Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model827_41) #ns
+
+model827_111 <- lm(`ASV#111` ~ `ath-miR827_MIMAT0004243` + Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model827_111) #ns
+
+model827_478 <- lm(`ASV#478` ~ `ath-miR827_MIMAT0004243` + Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model827_478) #ns
+
+model827_630 <- lm(`ASV#630` ~ `ath-miR827_MIMAT0004243` +Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model827_630) #ns
+
+#5642b
+model5642b_14 <- lm(`ASV#14` ~ `ath-miR5642b_MIMAT0022435`+Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model5642b_14) #*
+Anova(model5642b_14)# to extract ANOVA table from the model
+#Assumptions
+ncvTest(model5642b_14) #OK
+#normality assumption
+shapiro.test(residuals(model5642b_14)) #OK
+
+model5642b_98 <- lm(`ASV#98` ~ `ath-miR5642b_MIMAT0022435`+Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model5642b_98)#ns
+
+model5642b_478 <- lm(`ASV#478` ~ `ath-miR5642b_MIMAT0022435` +Nitrogen.x, data = Arabi_miR_16S_clean)
+summary(model5642b_478)#ns
+
+```
+#Linear regression models without N
+```{r}
+#For more information about assumptions reqquired to perform and interpret linear regression models, please consult
+#http://www.sthda.com/english/articles/39-regression-model-diagnostics/161-linear-regression-assumptions-and-diagnostics-in-r-essentials/
+
+#158a_3p
+model158a_67<-lm(`ASV#67` ~ `ath-miR158a-3p_MIMAT0000176`, data = Arabi_miR_16S_clean)
+summary(model158a_67)#ns
+
+model158a_111<-lm(`ASV#111` ~ `ath-miR158a-3p_MIMAT0000176`, data = Arabi_miR_16S_clean)
+summary(model158a_111) #*
+#Assumptions
+ncvTest(model158a_111) #OK
+#normality assumption
+shapiro.test(residuals(model158a_111)) #OK
+
+model158a_630<-lm(`ASV#630` ~ `ath-miR158a-3p_MIMAT0000176`, data = Arabi_miR_16S_clean)
+summary(model158a_630) #*
+#Assumptions
+ncvTest(model158a_630) #OK
+#normality assumption
+shapiro.test(residuals(model158a_630)) #OK
+
+#159
+model159_53 <- lm(`ASV#53` ~ `ath-miR159a_MIMAT0000177`, data = Arabi_miR_16S_clean)
+summary(model159_53) #ns
+
+#827
+model827_14 <- lm(`ASV#14` ~ `ath-miR827_MIMAT0004243`, data = Arabi_miR_16S_clean)
+summary(model827_14) #*
+#Assumptions
+par(mfrow = c(2, 2))
+plot(model827_14)
+ncvTest(model827_14)#OK
+#normality assumption
+shapiro.test(residuals(model827_14)) #OK
+
+model827_41 <- lm(`ASV#41` ~ `ath-miR827_MIMAT0004243`, data = Arabi_miR_16S_clean)
+summary(model827_41) #*
+#Assumptions
+ncvTest(model827_41) #OK
+#normality assumption
+shapiro.test(residuals(model827_41)) #OK
+
+model827_111 <- lm(`ASV#111` ~ `ath-miR827_MIMAT0004243`, data = Arabi_miR_16S_clean)
+summary(model827_111) #*
+#Assumptions
+ncvTest(model827_111) #OK
+#normality assumption
+shapiro.test(residuals(model827_111)) #OK
+
+model827_478 <- lm(`ASV#478` ~ `ath-miR827_MIMAT0004243`, data = Arabi_miR_16S_clean)
+summary(model827_478) #*
+#Assumptions
+ncvTest(model827_478) #problematic
+#normality assumption
+shapiro.test(residuals(model827_478)) # problematic
+
+model827_630 <- lm(`ASV#630` ~ `ath-miR827_MIMAT0004243`, data = Arabi_miR_16S_clean)
+summary(model827_630) #*
+#Assumptions
+ncvTest(model827_630) #OK
+#normality assumption
+shapiro.test(residuals(model827_630)) #OK
+
+#5642b
+model5642b_14 <- lm(`ASV#14` ~ `ath-miR5642b_MIMAT0022435`, data = Arabi_miR_16S_clean)
+summary(model5642b_14) #*
+#Assumptions
+ncvTest(model5642b_14) #OK
+#normality assumption
+shapiro.test(residuals(model5642b_14)) #OK
+
+model5642b_98 <- lm(`ASV#98` ~ `ath-miR5642b_MIMAT0022435`, data = Arabi_miR_16S_clean)
+summary(model5642b_98)#ns
+
+model5642b_478 <- lm(`ASV#478` ~ `ath-miR5642b_MIMAT0022435`, data = Arabi_miR_16S_clean)
+summary(model5642b_478)#ns
+
+```
+
