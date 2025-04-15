@@ -1,0 +1,158 @@
+---
+title: "Final_Figures"
+author: "Jessica A. Dozois"
+date: "2024-07-06"
+output: html_document
+---
+
+------------------------------------------------------------------------
+
+#Loading librairies
+
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,here,ggpubr)
+```
+
+#Creating folders
+
+```{r}
+dir.create(file.path("Output"))
+
+```
+
+#Figure 1 - Relative abundance of the five candidate miRNAs in the roots of A. thaliana
+
+```{r}
+miRNAs_5<-readRDS(file=here('Main','Arabidopsis__miRNAs_sig.rds'))
+
+fig1<- ggarrange(miRNAs_5, common.legend = T, font.label=list(color="black",size=14), legend='right')
+fig1
+ggsave(fig1, filename = here("Output" ,"Fig1.tiff"), compression = "lzw", dpi = 600, device = "tiff", height = 4, width = 10, units = "in")
+```
+
+
+
+#Figure 2 - miRNA modifies bacterial community growth
+
+```{r}
+AUC_sig<-readRDS(file=here('Main', 'AUC_sig.rds'))
+fig2 <- AUC_sig
+fig2
+ggsave(fig2, file=here("Output","Fig2.tiff"),units="cm", width=25, height=15, compression='lzw')
+
+```
+
+
+#Figure 3 - miRNA modify bacterial composition and L-lysine consumption
+
+```{r}
+stack<-readRDS(file=here('Main', 'Bars_mean_10uM.rds'))
+ASV_diff<-readRDS(file=here('Main', 'ASVs_sig_stat.rds'))
+PCA<-readRDS(file=here('Main', 'PCA_16S_10uM.rds'))
+Lys_use<-readRDS(file=here('Main','Lysine_use.rds'))
+coeff<-50000
+fig3 <- ggarrange(ggarrange(Lys_use,PCA, ncol = 2, labels = c("A", "B")),stack,ASV_diff,
+          labels = c("","C","D"),common.legend = F, nrow=3, font.label=list(color="black",size=14))
+fig3
+ggsave(fig3, filename = here("Output" ,"Fig3.tiff"), compression = "lzw", dpi = 600, device = "tiff", height = 16, width = 13.5, units = "in")
+```
+
+#Figure 4 - miRNAs affect how isolates grow and the rate at which they uptake amino acids from the media.
+
+```{r}
+Iso_AUC_Growth<-readRDS(file=here('Main', 'Isolates_AUC_Growth.rds'))
+fig4<-Iso_AUC_Growth
+ggsave(fig4, file=here("Output","Fig4.tiff"),dpi = 600, device = "tiff",units="cm", width = 36, height = 36, compression='lzw')
+```
+
+
+#Supplementary figures
+
+##Figure S1 - Relative abundance of the N responding miRNAs in roots
+
+```{r}
+miRNAs_N<-readRDS(file=here('Supplementary','N_responding_miRNAs_sig.rds'))
+figS1<- miRNAs_N
+ggsave(figS1, filename = here("Output" ,"FigS1.tiff"), compression = "lzw", dpi = 600, device = "tiff", height = 10, width = 10, units = "in")
+```
+
+##Figure S2 - Relative abundance of the most abundant miRNAs in roots
+
+```{r}
+miRNAs_abund<-readRDS(file=here('Supplementary','Arabidopsis_TOP_miRNAs_sig.rds'))
+figS2<-ggarrange(miRNAs_abund, common.legend = T, nrow=1, font.label=list(color="black",size=14), legend='right')
+figS2
+
+ggsave(figS2, filename = here("Output" ,"FigS2.tiff"), compression = "lzw", dpi = 600, device = "tiff", height = 6, width = 10, units = "in")
+
+```
+
+#Figure S3- Correlations between the relative abundance root miRNAs and bacterial taxa
+
+```{r}
+Corr<-readRDS(file=here('Supplementary','All_asv_vs_miRAra.rds'))
+figS3<- Corr
+figS3
+ggsave(figS3, filename = here("Output" ,"FigS3.tiff"), compression = "lzw", dpi = 600, device = "tiff", width = 30, height = 35, units = "cm")
+```
+
+##Figure S4 bacterial taxa in the roots of A. thaliana
+
+```{r}
+Correlated_ASVs<-readRDS(file=here('Supplementary','ASVs_Endosphere_sig.rds'))
+PCA_16S_roots<-readRDS(file=here('Supplementary','PCA_root_16S_plantexp.rds'))
+
+figS4<-ggarrange(Correlated_ASVs,PCA_16S_roots, labels = c("A","B"),common.legend = T,font.label=list(color="black",size=14),ncol=1, legend='right',heights=c(1,0.8))
+figS4
+ggsave(figS4, filename = here("Output" ,"figS4.tiff"), compression = "lzw", dpi = 600, device = "tiff", height = 12, width = 9, units = "in")
+```
+
+##Figure S5 - A mix of 5 miRNAs modify microbial growth
+
+```{r}
+Growth_10uM<-readRDS(file = here('Supplementary','L-AA_screen10uM.rds'))
+
+figS5 <- Growth_10uM
+
+ggsave(figS5, filename = here("Output" ,"figS5.tiff"), compression = "lzw", dpi = 600, device = "tiff", height = 20, width = 15, units = "in")
+```
+
+##Figure S6 - A single miRNA modifies microbial growth
+
+```{r}
+Growth2uM<-readRDS(file = here('Supplementary','L-AA_screen2uM.rds'))
+
+figS6<- Growth2uM
+
+ggsave(figS6, filename = here("Output" ,"figS6.tiff"), compression = "lzw", dpi = 600, device = "tiff", height = 14, width = 14, units = "in")
+```
+
+#Figure S7- Amino acid consumption of the simplified microbial community
+
+```{r}
+Comm_DualYaxis<-readRDS(file=here('Supplementary', 'All_everymiARN_dualY.rds'))
+figS7<-Comm_DualYaxis
+figS7
+ggsave(figS7, file=here("Output","FigS7.tiff"),width = 40, height = 30, units = "cm")
+```
+
+
+#Figure S8- Shifts in bacterial community composition exposed to single miRNAs
+
+```{r}
+StackSinglemiR<-readRDS(file=here('Supplementary', 'Bars_mean_2uM.rds'))
+figS8<-StackSinglemiR
+figS8
+ggsave(figS8, file=here("Output","FigS8.tiff"), width=32, height=12, units = "cm")
+```
+
+
+#Figure S9 - Impact of miRNAs on the growth of isolates 
+
+```{r}
+boxASVGrowth<-readRDS(file=here('Supplementary', 'boxisolates_growth_mostsig.rds'))
+figS9<-boxASVGrowth
+figS9
+ggsave(figS9, file=here("Output","FigS9.tiff"),width = 22, height = 18, units = "cm")
+```
