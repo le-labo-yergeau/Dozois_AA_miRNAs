@@ -66,6 +66,14 @@ fig4<-Iso_AUC_Growth
 ggsave(fig4, file=here("Output","Fig4.tiff"),dpi = 600, device = "tiff",units="cm", width = 36, height = 36, compression='lzw')
 ```
 
+#Figure 5 - Raoultella delayed the germination of Arabidopsis and in time killed the plants
+
+```{r}
+Germination<-readRDS(file=here('Main', 'Fig_Arabi_isolates.rds'))
+fig5<-Germination
+ggsave(fig5, file=here("Output","Fig5.tiff"),dpi = 600, device = "tiff",units="cm", width = 18, height = 18, compression='lzw')
+```
+
 
 #Supplementary figures
 
