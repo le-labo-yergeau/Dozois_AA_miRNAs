@@ -16,7 +16,7 @@ B) The effect of miRNAs on the growth of the simplified microbial community (Com
 C) The analyses of the  16S amplicon sequencing data of the simplified microbial community exposed to miRNAs (16SvsmiRNAs).
 D) The impact of miRNAs on the bacterial consumption of amino acids (AA_consumption).
 E) The effect of miRNAs on the growth of three bacterial isolates (ASVgrowth_vs_miRNA).
-D) The germination assay analyses where Arabidopsis was inoculated with bacterial isolates (Germination_test_ACR). 
+F) The germination assay analyses where Arabidopsis was inoculated with bacterial isolates (Germination_test_ACR). 
 
 -Final_figures: 
 This folder contains
