@@ -1,0 +1,1319 @@
+---
+title: "01_Statistics"
+author: "Jessica A. Dozois"
+date: "2024-07-15"
+output: html_document
+---
+
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "ASV4_test"), recursive=TRUE)
+dir.create(file.path("Output", "ASV4_AA_test"), recursive=TRUE)
+dir.create(file.path("Output", "ASV6_test"), recursive=TRUE)
+dir.create(file.path("Output", "ASV6_phe_test"), recursive=TRUE)           
+dir.create(file.path("Output", "ASV172_test"), recursive=TRUE)
+```
+
+#Importing data
+```{r Importation}
+plate1<-read.table(file.path("Raw_Data", "20240703_isolates_vs_miRNA_n1.csv"), header=T, sep=",", comment.char = "") # 2226 obs 8 variables
+#removing G10 well pair (+ G9) as there was condensation
+plate1<-plate1[!plate1$Well_ID=="G10",]
+plate1<-plate1[!plate1$Well_ID=="G9",]
+plate2<-read.table(file.path("Raw_Data", "20240705_isolates_vs_miRNA_n2.csv"), header=T, sep=",", comment.char = "") # 1484 obs 8 variables
+plate2.2<-read.table(file.path("Raw_Data", "20240712_isolates_vs_miRNAs_n2_retake.csv"), header=T, sep=",", comment.char = "") # 3920 obs 8 variables
+plate2.2 <- plate2.2[!(plate2.2$Time %in% c('53','54','55','56','57','58','59','60','61','62','63','64','65','66','67','68','69')), ]
+#removing extra time points
+plate2.2<-plate2.2[!plate2.2$ASV=='4',]# 2332 obs 8 variables
+
+plate3<-read.table(file.path("Raw_Data", "20240709_isolates_vs_miRNAs_n3.csv"), header=T, sep=",", comment.char = "") # 2968 obs 8 variables
+plate4<-read.table(file.path("Raw_Data", "20240714_isolates_vs_miRNAs_n4.csv"), header=T, sep=",", comment.char = "") #2226 obs 8 variables
+plate5<-read.table(file.path("Raw_Data", "20240717_isolates_vs_miRNAs_n5.csv"), header=T, sep=",", comment.char = "") #1456 obs 8 variables
+plate6<-read.table(file.path("Raw_Data", "20240719_isolates_vs_miRNAs_n6.csv"), header=T, sep=",", comment.char = "") #2530 obs 8 variables
+Raoul_AA<-read.table(file.path("Raw_Data", "Raoultella_Growth_17AA.csv"), header=T, sep=",", comment.char = "")
+#3392 obs. 9 variables
+
+Raoul_AA$Time<-as.factor(Raoul_AA$Time)
+Raoul_AA$Replicate<-as.factor(Raoul_AA$Replicate)
+Raoul_AA$Dose.uM.<-as.factor(Raoul_AA$Dose.uM.)
+
+#fusing all the data
+Dosedf<-rbind(plate1,plate2,plate2.2,plate3,plate4,plate5,plate6) #15116 obs 8 variables
+
+Dosedf$Time<-as.factor(Dosedf$Time)
+Dosedf$Replicate<-as.factor(Dosedf$Replicate)
+Dosedf$Dose.uM.<-as.factor(Dosedf$Dose.uM.)
+```
+
+#Subsetting data
+```{r}
+#Removing Controls
+Dosedf<-Dosedf[!Dosedf$ASV=="Control",]
+#Separating ASVs
+ASV4<-Dosedf[Dosedf$ASV=="4",] #3380 obs 8 variables
+ASV6<-Dosedf[Dosedf$ASV=="6",] #6360 obs 8 variables
+ASV6_mix<-ASV6[ASV6$N_souce=="Mix_17aa",] #3180 obs 8 variables
+ASV6_phe<-ASV6[ASV6$N_souce=="Phenyalanine",]#3180 obs 8 variables
+ASV172<-Dosedf[Dosedf$ASV=="172",] #3168 obs 8 variables
+
+#Subsetting by miRNA treatment 
+ASV4_158a3p <- subset(ASV4, miRNA %in% c('p158a', 'sc158a')) 
+ASV4_158b <- subset(ASV4, miRNA %in% c('p158b', 'sc158b'))
+ASV4_159 <- subset(ASV4, miRNA %in% c('p159', 'sc159'))
+ASV4_827 <- subset(ASV4, miRNA %in% c('p827', 'sc827'))
+ASV4_5642b <- subset(ASV4, miRNA %in% c('p5642b', 'sc5642b'))
+ASV4_mixmiR <- subset(ASV4, miRNA %in% c('p_mix', 'sc_mix'))
+
+ASV4_AA_158a3p <- subset(Raoul_AA, miRNA %in% 'ath-miR158a3p') 
+ASV4_AA_158b <- subset(Raoul_AA, miRNA %in% 'ath-miR158b')
+ASV4_AA_159 <- subset(Raoul_AA, miRNA %in% 'ath-miR159')
+ASV4_AA_827 <- subset(Raoul_AA, miRNA %in% 'ath-miR827')
+ASV4_AA_5642b <- subset(Raoul_AA, miRNA %in% 'ath-miR5642b')
+ASV4_AA_mixmiR <- subset(Raoul_AA, miRNA %in% 'Mix5')
+
+
+ASV6_mix_158a3p <- subset(ASV6_mix, miRNA %in% c('p158a', 'sc158a')) 
+ASV6_mix_158b <- subset(ASV6_mix, miRNA %in% c('p158b', 'sc158b'))
+ASV6_mix_159 <- subset(ASV6_mix, miRNA %in% c('p159', 'sc159'))
+ASV6_mix_827 <- subset(ASV6_mix, miRNA %in% c('p827', 'sc827'))
+ASV6_mix_5642b <- subset(ASV6_mix, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_mix_mixmiR <- subset(ASV6_mix, miRNA %in% c('p_mix', 'sc_mix'))
+
+
+ASV6_phe_158a3p <- subset(ASV6_phe, miRNA %in% c('p158a', 'sc158a'))
+ASV6_phe_158b <- subset(ASV6_phe, miRNA %in% c('p158b', 'sc158b'))
+ASV6_phe_159 <- subset(ASV6_phe, miRNA %in% c('p159', 'sc159'))
+ASV6_phe_827 <- subset(ASV6_phe, miRNA %in% c('p827', 'sc827'))
+ASV6_phe_5642b <- subset(ASV6_phe, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_phe_mixmiR <- subset(ASV6_phe, miRNA %in% c('p_mix', 'sc_mix'))
+
+
+ASV172_158a3p <- subset(ASV172, miRNA %in% c('p158a', 'sc158a')) 
+ASV172_158b <- subset(ASV172, miRNA %in% c('p158b', 'sc158b'))
+ASV172_159 <- subset(ASV172, miRNA %in% c('p159', 'sc159'))
+ASV172_827 <- subset(ASV172, miRNA %in% c('p827', 'sc827'))
+ASV172_5642b <- subset(ASV172, miRNA %in% c('p5642b', 'sc5642b'))
+ASV172_mixmiR <- subset(ASV172, miRNA %in% c('p_mix', 'sc_mix'))
+
+```
+
+#T-test ASV4
+```{r}
+
+loop<-levels(Dosedf$Time)
+#ath-miR158a3p
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_158a3p[ASV4_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_test" ,"Assump_ASV4_158a3p.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_158a3p[ASV4_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_test","ASV4_158a3p_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR158b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_158b[ASV4_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_test" ,"Assump_ASV4_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_158b[ASV4_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_test","ASV4_158b_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR159
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_159[ASV4_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_test" ,"Assump_ASV4_159.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_159[ASV4_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_test","ASV4_159_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+#ath-miR827
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_827[ASV4_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_test" ,"Assump_ASV4_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_827[ASV4_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_test","ASV4_827_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+#ath-miR5642b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_5642b[ASV4_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_test" ,"Assump_ASV4_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_5642b[ASV4_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_test","ASV4_5642b_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+#mix of miRNAs
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_mixmiR[ASV4_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_test" ,"Assump_ASV4__mix.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_mixmiR[ASV4_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_test","ASV4__mix_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+```
+
+
+#T-test ASV4 Mix AA
+```{r}
+
+loop<-levels(Raoul_AA$Time)
+#ath-miR158a3p
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_158a3p[ASV4_AA_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_AA_test" ,"Assump_ASV4_AA_158a3p.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_158a3p[ASV4_AA_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_AA_test","ASV4_AA_158a3p_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #ns
+
+
+loop<-levels(Raoul_AA$Time)
+
+#ath-miR158b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_158b[ASV4_AA_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_AA_test" ,"Assump_ASV4_AA_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_158b[ASV4_AA_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_AA_test","ASV4_AA_158b_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_158b[ASV4_AA_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_AA_test","ASV4_AA_158b_wilcox.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+loop<-levels(Raoul_AA$Time)
+
+#ath-miR159
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_159[ASV4_AA_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_AA_test" ,"Assump_ASV4_AA_159.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_159[ASV4_AA_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_AA_test","ASV4_AA_159_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #ns
+
+#ath-miR827
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_827[ASV4_AA_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_AA_test" ,"Assump_ASV4_AA_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_827[ASV4_AA_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_AA_test","ASV4_AA_827_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+#ath-miR5642b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_5642b[ASV4_AA_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_AA_test" ,"Assump_ASV4_AA_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_5642b[ASV4_AA_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_AA_test","ASV4_AA_5642b_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #ns
+
+#mix of miRNAs
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_mixmiR[ASV4_AA_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV4_AA_test" ,"Assump_ASV4_AA_mix.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV4_AA_mixmiR[ASV4_AA_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$Treatment=="Plant",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$Treatment=="Scramble",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV4_AA_test","ASV4_AA_mix_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} # 0 and 2
+```
+
+
+
+
+#T-test ASV6 phe
+```{r}
+
+loop<-levels(Dosedf$Time)
+#ath-miR158a3p
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_158a3p[ASV6_phe_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_phe_test" ,"Assump_ASV6_phe_158a3p.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_158a3p[ASV6_phe_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_phe_test","ASV6_phe_158a3p_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR158b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_158b[ASV6_phe_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_phe_test" ,"Assump_ASV6_phe_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_158b[ASV6_phe_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_phe_test","ASV6_phe_158b_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+loop<-levels(Dosedf$Time)
+#ath-miR159
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_159[ASV6_phe_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_phe_test" ,"Assump_ASV6_phe_159.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_159[ASV6_phe_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_phe_test","ASV6_phe_159_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR827
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_827[ASV6_phe_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_phe_test" ,"Assump_ASV6_phe_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_827[ASV6_phe_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_phe_test","ASV6_phe_827_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+#ath-miR5642b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_5642b[ASV6_phe_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_phe_test" ,"Assump_ASV6_phe_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_5642b[ASV6_phe_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_phe_test","ASV6_phe_5642b_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+#mix of miRNAs
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_mixmiR[ASV6_phe_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_phe_test" ,"Assump_ASV6_phe__mix.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_phe_mixmiR[ASV6_phe_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_phe_test","ASV6_phe__mix_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+```
+
+#T-test ASV6 Mix AA
+```{r}
+
+loop<-levels(Dosedf$Time)
+#ath-miR158a3p
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_158a3p[ASV6_mix_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_test" ,"Assump_ASV6_mix_158a3p.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_158a3p[ASV6_mix_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_test","ASV6_mix_158a3p_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR158b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_158b[ASV6_mix_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_test" ,"Assump_ASV6_mix_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_158b[ASV6_mix_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_test","ASV6_mix_158b_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+loop<-levels(Dosedf$Time)
+#ath-miR159
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_159[ASV6_mix_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_test" ,"Assump_ASV6_mix_159.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_159[ASV6_mix_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_test","ASV6_mix_159_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_159[ASV6_mix_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_test", "ASV6_mix_159_wilcox.test_less.txt"), append=T) 
+  } 
+ i=i+1}
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR827
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_827[ASV6_mix_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_test" ,"Assump_ASV6_mix_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_827[ASV6_mix_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_test","ASV6_mix_827_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+#ath-miR5642b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_5642b[ASV6_mix_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_test" ,"Assump_ASV6_mix_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_5642b[ASV6_mix_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_test","ASV6_mix_5642b_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+#mix of miRNAs
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_mixmiR[ASV6_mix_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV6_test" ,"Assump_ASV6_mix__mix.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV6_mix_mixmiR[ASV6_mix_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV6_test","ASV6_mix__mix_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+```
+
+#T-test ASV172
+```{r}
+
+loop<-levels(Dosedf$Time)
+#ath-miR158a3p
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_158a3p[ASV172_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV172_test" ,"Assump_ASV172_158a3p.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_158a3p[ASV172_158a3p$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158a",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158a",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV172_test","ASV172_158a3p_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR158b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_158b[ASV172_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV172_test" ,"Assump_ASV172_158b.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_158b[ASV172_158b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p158b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc158b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV172_test","ASV172_158b_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+loop<-levels(Dosedf$Time)
+#ath-miR159
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_159[ASV172_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV172_test" ,"Assump_ASV172_159.txt"), append=T) 
+  } 
+ i=i+1}
+
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_159[ASV172_159$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p159",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc159",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV172_test", "ASV172_159_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1}
+
+loop<-levels(Dosedf$Time)
+
+#ath-miR827
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_827[ASV172_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV172_test" ,"Assump_ASV172_827.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_827[ASV172_827$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p827",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc827",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV172_test","ASV172_827_t.test_less.txt"), append=T) 
+  } 
+ i=i+1} #
+
+#ath-miR5642b
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_5642b[ASV172_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV172_test" ,"Assump_ASV172_5642b.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_5642b[ASV172_5642b$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p5642b",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc5642b",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV172_test", "ASV172_5642b_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1}
+
+#mix of miRNAs
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_mixmiR[ASV172_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+differences<- as.data.frame(mirscram - mirplant)
+outliers<-identify_outliers(differences) 
+test<-shapiro_test(differences$`mirscram - mirplant`)
+{
+  if(nrow(outliers)>=1|test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","Statistic:", test$statistic,"Outliers:",outliers$is.outlier,"\n", file=here("Output","ASV172_test" ,"Assump_ASV172__mix.txt"), append=T) 
+  } 
+ i=i+1}
+
+i=0 
+for(i in 1:53) 
+{
+Timepoint<-ASV172_mixmiR[ASV172_mixmiR$Time==loop[i],]
+plant<- Timepoint[Timepoint$miRNA=="p_mix",]
+planto<-plant[order(plant$Replicate),]
+mirplant<-planto$OD_600
+scram<- Timepoint[Timepoint$miRNA=="sc_mix",]
+scramo<-scram[order(scram$Replicate),]
+mirscram<-scramo$OD_600
+test<-t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+{
+  if(test$p.value < 0.05)
+    cat("Time:",loop[i]," ","p.value :", test$p.value, " ","statistic:", test$statistic, "\n", file=here("Output","ASV172_test","ASV172__mix_t.test_greater.txt"), append=T) 
+  } 
+ i=i+1} #
+
+```

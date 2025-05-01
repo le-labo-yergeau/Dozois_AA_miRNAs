@@ -1,0 +1,958 @@
+---
+title: "03_Statistics_AUC"
+author: "Marc-Antoine Duchesne"
+date: "2024-08-31"
+output: html_document
+---
+
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,tidyr,forcats,here,ggpubr,car,rstatix, pracma, purrr)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "test_AUC"), recursive=TRUE)
+```
+
+#Importing data
+```{r Importation}
+plate1<-read.table(file.path("Raw_Data", "20240703_isolates_vs_miRNA_n1.csv"), header=T, sep=",", comment.char = "") # 2226 obs 8 variables
+#removing G10 well pair (+ G9) as there was condensation
+plate1<-plate1[!plate1$Well_ID=="G10",]
+plate1<-plate1[!plate1$Well_ID=="G9",]
+plate2<-read.table(file.path("Raw_Data", "20240705_isolates_vs_miRNA_n2.csv"), header=T, sep=",", comment.char = "") # 1484 obs 8 variables
+plate2.2<-read.table(file.path("Raw_Data", "20240712_isolates_vs_miRNAs_n2_retake.csv"), header=T, sep=",", comment.char = "") # 3920 obs 8 variables
+plate2.2 <- plate2.2[!(plate2.2$Time %in% c('53','54','55','56','57','58','59','60','61','62','63','64','65','66','67','68','69')), ]
+#removing extra time points
+plate2.2<-plate2.2[!plate2.2$ASV=='4',]# 2332 obs 8 variables
+
+plate3<-read.table(file.path("Raw_Data", "20240709_isolates_vs_miRNAs_n3.csv"), header=T, sep=",", comment.char = "") # 2968 obs 8 variables
+plate4<-read.table(file.path("Raw_Data", "20240714_isolates_vs_miRNAs_n4.csv"), header=T, sep=",", comment.char = "") #2226 obs 8 variables
+plate5<-read.table(file.path("Raw_Data", "20240717_isolates_vs_miRNAs_n5.csv"), header=T, sep=",", comment.char = "") #1456 obs 8 variables
+plate6<-read.table(file.path("Raw_Data", "20240719_isolates_vs_miRNAs_n6.csv"), header=T, sep=",", comment.char = "") #2530 obs 8 variables
+Raoul_AA<-read.table(file.path("Raw_Data", "Raoultella_Growth_17AA.csv"), header=T, sep=",", comment.char = "")
+#3392 obs. 9 variables
+
+Raoul_AA$Time<-as.numeric(Raoul_AA$Time)
+Raoul_AA$Replicate<-as.factor(Raoul_AA$Replicate)
+Raoul_AA$Dose.uM.<-as.factor(Raoul_AA$Dose.uM.)
+
+#fusing all the data
+Dosedf<-rbind(plate1,plate2,plate2.2,plate3,plate4,plate5,plate6) #15116 obs 8 variables
+
+Dosedf$Time<-as.numeric(Dosedf$Time)
+Dosedf$Replicate<-as.factor(Dosedf$Replicate)
+Dosedf$Dose.uM.<-as.factor(Dosedf$Dose.uM.)
+Dosedf$N_souce<-as.factor(Dosedf$N_souce)
+```
+
+#Subsetting data
+```{r}
+#Removing Controls
+Dosedf<-Dosedf[!Dosedf$ASV=="Control",]
+#Separating ASVs
+ASV4<-Dosedf[Dosedf$ASV=="4",] #3380 obs 8 variables
+ASV6<-Dosedf[Dosedf$ASV=="6",] #6360 obs 8 variables
+ASV6_mix<-ASV6[ASV6$N_souce=="Mix_17aa",] #3180 obs 8 variables
+ASV6_phe<-ASV6[ASV6$N_souce=="Phenyalanine",]#3180 obs 8 variables
+ASV172<-Dosedf[Dosedf$ASV=="172",] #3168 obs 8 variables
+
+#Subsetting by miRNA treatment 
+ASV4_158a3p <- subset(ASV4, miRNA %in% c('p158a', 'sc158a')) 
+ASV4_158b <- subset(ASV4, miRNA %in% c('p158b', 'sc158b'))
+ASV4_159 <- subset(ASV4, miRNA %in% c('p159', 'sc159'))
+ASV4_827 <- subset(ASV4, miRNA %in% c('p827', 'sc827'))
+ASV4_5642b <- subset(ASV4, miRNA %in% c('p5642b', 'sc5642b'))
+ASV4_mixmiR <- subset(ASV4, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV4_158a3p
+ASV4_158a3p_0_32 <- subset(ASV4_158a3p, Time >= 0 & Time <= 32)
+ASV4_158a3p_33_52 <- subset(ASV4_158a3p, Time >= 33 & Time <= 52)
+
+# Subsetting ASV4_158b
+ASV4_158b_0_32 <- subset(ASV4_158b, Time >= 0 & Time <= 32)
+ASV4_158b_33_52 <- subset(ASV4_158b, Time >= 33 & Time <= 52)
+
+# Subsetting ASV4_159
+ASV4_159_0_32 <- subset(ASV4_159, Time >= 0 & Time <= 32)
+ASV4_159_33_52 <- subset(ASV4_159, Time >= 33 & Time <= 52)
+
+# Subsetting ASV4_827
+ASV4_827_0_32 <- subset(ASV4_827, Time >= 0 & Time <= 32)
+ASV4_827_33_52 <- subset(ASV4_827, Time >= 33 & Time <= 52)
+
+# Subsetting ASV4_5642b
+ASV4_5642b_0_32 <- subset(ASV4_5642b, Time >= 0 & Time <= 32)
+ASV4_5642b_33_52 <- subset(ASV4_5642b, Time >= 33 & Time <= 52)
+
+# Subsetting ASV4_mixmiR
+ASV4_mixmiR_0_32 <- subset(ASV4_mixmiR, Time >= 0 & Time <= 32)
+ASV4_mixmiR_33_52 <- subset(ASV4_mixmiR, Time >= 33 & Time <= 52)
+
+#Raoultella in Mix of 17 AA 
+ASV4_AA_158a3p <- subset(Raoul_AA, miRNA %in% 'ath-miR158a3p') 
+ASV4_AA_158b <- subset(Raoul_AA, miRNA %in% 'ath-miR158b')
+ASV4_AA_159 <- subset(Raoul_AA, miRNA %in% 'ath-miR159')
+ASV4_AA_827 <- subset(Raoul_AA, miRNA %in% 'ath-miR827')
+ASV4_AA_5642b <- subset(Raoul_AA, miRNA %in% 'ath-miR5642b')
+ASV4_AA_mixmiR <- subset(Raoul_AA, miRNA %in% 'Mix5')
+
+# Subsetting ASV4_AA_158a3p
+ASV4_AA_158a3p_0_10 <- subset(ASV4_AA_158a3p, Time >= 0 & Time <= 10)
+ASV4_AA_158a3p_11_52 <- subset(ASV4_AA_158a3p, Time >= 11 & Time <= 52)
+
+# Subsetting ASV4_AA_158b
+ASV4_AA_158b_0_10 <- subset(ASV4_AA_158b, Time >= 0 & Time <= 10)
+ASV4_AA_158b_11_52 <- subset(ASV4_AA_158b, Time >= 11 & Time <= 52)
+
+# Subsetting ASV4_AA_159
+ASV4_AA_159_0_10 <- subset(ASV4_AA_159, Time >= 0 & Time <= 10)
+ASV4_AA_159_11_52 <- subset(ASV4_AA_159, Time >= 11 & Time <= 52)
+
+# Subsetting ASV4_AA_827
+ASV4_AA_827_0_10 <- subset(ASV4_AA_827, Time >= 0 & Time <= 10)
+ASV4_AA_827_11_52 <- subset(ASV4_AA_827, Time >= 11 & Time <= 52)
+
+# Subsetting ASV4_AA_5642b
+ASV4_AA_5642b_0_10 <- subset(ASV4_AA_5642b, Time >= 0 & Time <= 10)
+ASV4_AA_5642b_11_52 <- subset(ASV4_AA_5642b, Time >= 11 & Time <= 52)
+
+# Subsetting ASV4_AA_mixmiR
+ASV4_AA_mixmiR_0_10 <- subset(ASV4_AA_mixmiR, Time >= 0 & Time <= 10)
+ASV4_AA_mixmiR_11_52 <- subset(ASV4_AA_mixmiR, Time >= 11 & Time <= 52)
+
+ASV6_mix_158a3p <- subset(ASV6_mix, miRNA %in% c('p158a', 'sc158a')) 
+ASV6_mix_158b <- subset(ASV6_mix, miRNA %in% c('p158b', 'sc158b'))
+ASV6_mix_159 <- subset(ASV6_mix, miRNA %in% c('p159', 'sc159'))
+ASV6_mix_827 <- subset(ASV6_mix, miRNA %in% c('p827', 'sc827'))
+ASV6_mix_5642b <- subset(ASV6_mix, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_mix_mixmiR <- subset(ASV6_mix, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV6_mix_158a3p
+ASV6_mix_158a3p_0_14 <- subset(ASV6_mix_158a3p, Time >= 0 & Time < 14)
+ASV6_mix_158a3p_14_52 <- subset(ASV6_mix_158a3p, Time >= 14 & Time <= 52)
+
+# Subsetting ASV6_mix_158b
+ASV6_mix_158b_0_14 <- subset(ASV6_mix_158b, Time >= 0 & Time < 14)
+ASV6_mix_158b_14_52 <- subset(ASV6_mix_158b, Time >= 14 & Time <= 52)
+
+# Subsetting ASV6_mix_159
+ASV6_mix_159_0_14 <- subset(ASV6_mix_159, Time >= 0 & Time < 14)
+ASV6_mix_159_14_52 <- subset(ASV6_mix_159, Time >= 14 & Time <= 52)
+
+# Subsetting ASV6_mix_827
+ASV6_mix_827_0_14 <- subset(ASV6_mix_827, Time >= 0 & Time < 14)
+ASV6_mix_827_14_52 <- subset(ASV6_mix_827, Time >= 14 & Time <= 52)
+
+# Subsetting ASV6_mix_5642b
+ASV6_mix_5642b_0_14 <- subset(ASV6_mix_5642b, Time >= 0 & Time < 14)
+ASV6_mix_5642b_14_52 <- subset(ASV6_mix_5642b, Time >= 14 & Time <= 52)
+
+# Subsetting ASV6_mix_mixmiR
+ASV6_mix_mixmiR_0_14 <- subset(ASV6_mix_mixmiR, Time >= 0 & Time < 14)
+ASV6_mix_mixmiR_14_52 <- subset(ASV6_mix_mixmiR, Time >= 14 & Time <= 52)
+
+ASV6_phe_158a3p <- subset(ASV6_phe, miRNA %in% c('p158a', 'sc158a'))
+ASV6_phe_158b <- subset(ASV6_phe, miRNA %in% c('p158b', 'sc158b'))
+ASV6_phe_159 <- subset(ASV6_phe, miRNA %in% c('p159', 'sc159'))
+ASV6_phe_827 <- subset(ASV6_phe, miRNA %in% c('p827', 'sc827'))
+ASV6_phe_5642b <- subset(ASV6_phe, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_phe_mixmiR <- subset(ASV6_phe, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV6_phe_158a3p
+ASV6_phe_158a3p_0_2 <- subset(ASV6_phe_158a3p, Time >= 0 & Time <= 2)
+ASV6_phe_158a3p_3_23 <- subset(ASV6_phe_158a3p, Time >= 3 & Time <= 23)
+ASV6_phe_158a3p_24_45 <- subset(ASV6_phe_158a3p, Time >= 24 & Time <= 45)
+ASV6_phe_158a3p_46_52 <- subset(ASV6_phe_158a3p, Time >= 46 & Time <= 52)
+
+# Subsetting ASV6_phe_158b
+ASV6_phe_158b_0_2 <- subset(ASV6_phe_158b, Time >= 0 & Time <= 2)
+ASV6_phe_158b_3_23 <- subset(ASV6_phe_158b, Time >= 3 & Time <= 23)
+ASV6_phe_158b_24_45 <- subset(ASV6_phe_158b, Time >= 24 & Time <= 45)
+ASV6_phe_158b_46_52 <- subset(ASV6_phe_158b, Time >= 46 & Time <= 52)
+
+# Subsetting ASV6_phe_159
+ASV6_phe_159_0_2 <- subset(ASV6_phe_159, Time >= 0 & Time <= 2)
+ASV6_phe_159_3_23 <- subset(ASV6_phe_159, Time >= 3 & Time <= 23)
+ASV6_phe_159_24_45 <- subset(ASV6_phe_159, Time >= 24 & Time <= 45)
+ASV6_phe_159_46_52 <- subset(ASV6_phe_159, Time >= 46 & Time <= 52)
+
+# Subsetting ASV6_phe_827
+ASV6_phe_827_0_2 <- subset(ASV6_phe_827, Time >= 0 & Time <= 2)
+ASV6_phe_827_3_23 <- subset(ASV6_phe_827, Time >= 3 & Time <= 23)
+ASV6_phe_827_24_45 <- subset(ASV6_phe_827, Time >= 24 & Time <= 45)
+ASV6_phe_827_46_52 <- subset(ASV6_phe_827, Time >= 46 & Time <= 52)
+
+# Subsetting ASV6_phe_5642b
+ASV6_phe_5642b_0_2 <- subset(ASV6_phe_5642b, Time >= 0 & Time <= 2)
+ASV6_phe_5642b_3_23 <- subset(ASV6_phe_5642b, Time >= 3 & Time <= 23)
+ASV6_phe_5642b_24_45 <- subset(ASV6_phe_5642b, Time >= 24 & Time <= 45)
+ASV6_phe_5642b_46_52 <- subset(ASV6_phe_5642b, Time >= 46 & Time <= 52)
+
+# Subsetting ASV6_phe_mixmiR
+ASV6_phe_mixmiR_0_2 <- subset(ASV6_phe_mixmiR, Time >= 0 & Time <= 2)
+ASV6_phe_mixmiR_3_23 <- subset(ASV6_phe_mixmiR, Time >= 3 & Time <= 23)
+ASV6_phe_mixmiR_24_45 <- subset(ASV6_phe_mixmiR, Time >= 24 & Time <= 45)
+ASV6_phe_mixmiR_46_52 <- subset(ASV6_phe_mixmiR, Time >= 46 & Time <= 52)
+
+
+ASV172_158a3p <- subset(ASV172, miRNA %in% c('p158a', 'sc158a')) 
+ASV172_158b <- subset(ASV172, miRNA %in% c('p158b', 'sc158b'))
+ASV172_159 <- subset(ASV172, miRNA %in% c('p159', 'sc159'))
+ASV172_827 <- subset(ASV172, miRNA %in% c('p827', 'sc827'))
+ASV172_5642b <- subset(ASV172, miRNA %in% c('p5642b', 'sc5642b'))
+ASV172_mixmiR <- subset(ASV172, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV172_158a3p
+ASV172_158a3p_0_3 <- subset(ASV172_158a3p, Time >= 0 & Time <= 3)
+ASV172_158a3p_4_28 <- subset(ASV172_158a3p, Time >= 4 & Time <= 28)
+ASV172_158a3p_29_52 <- subset(ASV172_158a3p, Time > 28 & Time <= 52)
+
+# Subsetting ASV172_158b
+ASV172_158b_0_3 <- subset(ASV172_158b, Time >= 0 & Time <= 3)
+ASV172_158b_4_28 <- subset(ASV172_158b, Time >= 4 & Time <= 28)
+ASV172_158b_29_52 <- subset(ASV172_158b, Time > 28 & Time <= 52)
+
+# Subsetting ASV172_159
+ASV172_159_0_3 <- subset(ASV172_159, Time >= 0 & Time <= 3)
+ASV172_159_4_28 <- subset(ASV172_159, Time >= 4 & Time <= 28)
+ASV172_159_29_52 <- subset(ASV172_159, Time > 28 & Time <= 52)
+
+# Subsetting ASV172_827
+ASV172_827_0_3 <- subset(ASV172_827, Time >= 0 & Time <= 3)
+ASV172_827_4_28 <- subset(ASV172_827, Time >= 4 & Time <= 28)
+ASV172_827_29_52 <- subset(ASV172_827, Time > 28 & Time <= 52)
+
+# Subsetting ASV172_5642b
+ASV172_5642b_0_3 <- subset(ASV172_5642b, Time >= 0 & Time <= 3)
+ASV172_5642b_4_28 <- subset(ASV172_5642b, Time >= 4 & Time <= 28)
+ASV172_5642b_29_52 <- subset(ASV172_5642b, Time > 28 & Time <= 52)
+
+# Subsetting ASV172_mixmiR
+ASV172_mixmiR_0_3 <- subset(ASV172_mixmiR, Time >= 0 & Time <= 3)
+ASV172_mixmiR_4_28 <- subset(ASV172_mixmiR, Time >= 4 & Time <= 28)
+ASV172_mixmiR_29_52 <- subset(ASV172_mixmiR, Time > 28 & Time <= 52)
+
+
+```
+
+#Listing subsets
+```{r}
+subset_list <- list(
+  # ASV4 subsets
+  ASV4_158a3p = ASV4_158a3p,
+  ASV4_158a3p_0_32 = ASV4_158a3p_0_32,
+  ASV4_158a3p_33_52 = ASV4_158a3p_33_52,
+  
+  ASV4_158b = ASV4_158b,
+  ASV4_158b_0_32 = ASV4_158b_0_32,
+  ASV4_158b_33_52 = ASV4_158b_33_52,
+  
+  ASV4_159 = ASV4_159,
+  ASV4_159_0_32 = ASV4_159_0_32,
+  ASV4_159_33_52 = ASV4_159_33_52,
+  
+  ASV4_827 = ASV4_827,
+  ASV4_827_0_32 = ASV4_827_0_32,
+  ASV4_827_33_52 = ASV4_827_33_52,
+  
+  ASV4_5642b = ASV4_5642b,
+  ASV4_5642b_0_32 = ASV4_5642b_0_32,
+  ASV4_5642b_33_52 = ASV4_5642b_33_52,
+  
+  ASV4_mixmiR = ASV4_mixmiR,
+  ASV4_mixmiR_0_32 = ASV4_mixmiR_0_32,
+  ASV4_mixmiR_33_52 = ASV4_mixmiR_33_52,
+  
+  # ASV6_mix subsets
+  ASV6_mix_158a3p = ASV6_mix_158a3p,
+  ASV6_mix_158a3p_0_14 = ASV6_mix_158a3p_0_14,
+  ASV6_mix_158a3p_14_52 = ASV6_mix_158a3p_14_52,
+  
+  ASV6_mix_158b = ASV6_mix_158b,
+  ASV6_mix_158b_0_14 = ASV6_mix_158b_0_14,
+  ASV6_mix_158b_14_52 = ASV6_mix_158b_14_52,
+  
+  ASV6_mix_159 = ASV6_mix_159,
+  ASV6_mix_159_0_14 = ASV6_mix_159_0_14,
+  ASV6_mix_159_14_52 = ASV6_mix_159_14_52,
+  
+  ASV6_mix_827 = ASV6_mix_827,
+  ASV6_mix_827_0_14 = ASV6_mix_827_0_14,
+  ASV6_mix_827_14_52 = ASV6_mix_827_14_52,
+  
+  ASV6_mix_5642b = ASV6_mix_5642b,
+  ASV6_mix_5642b_0_14 = ASV6_mix_5642b_0_14,
+  ASV6_mix_5642b_14_52 = ASV6_mix_5642b_14_52,
+  
+  ASV6_mix_mixmiR = ASV6_mix_mixmiR,
+  ASV6_mix_mixmiR_0_14 = ASV6_mix_mixmiR_0_14,
+  ASV6_mix_mixmiR_14_52 = ASV6_mix_mixmiR_14_52,
+
+  # ASV6_phe subsets
+  ASV6_phe_158a3p = ASV6_phe_158a3p,
+  ASV6_phe_158a3p_0_2 = ASV6_phe_158a3p_0_2,
+  ASV6_phe_158a3p_3_23 = ASV6_phe_158a3p_3_23,
+  ASV6_phe_158a3p_24_45 = ASV6_phe_158a3p_24_45,
+  ASV6_phe_158a3p_46_52 = ASV6_phe_158a3p_46_52,
+  
+  ASV6_phe_158b = ASV6_phe_158b,
+  ASV6_phe_158b_0_2 = ASV6_phe_158b_0_2,
+  ASV6_phe_158b_3_23 = ASV6_phe_158b_3_23,
+  ASV6_phe_158b_24_45 = ASV6_phe_158b_24_45,
+  ASV6_phe_158b_46_52 = ASV6_phe_158b_46_52,
+  
+  ASV6_phe_159 = ASV6_phe_159,
+  ASV6_phe_159_0_2 = ASV6_phe_159_0_2,
+  ASV6_phe_159_3_23 = ASV6_phe_159_3_23,
+  ASV6_phe_159_24_45 = ASV6_phe_159_24_45,
+  ASV6_phe_159_46_52 = ASV6_phe_159_46_52,
+  
+  ASV6_phe_827 = ASV6_phe_827,
+  ASV6_phe_827_0_2 = ASV6_phe_827_0_2,
+  ASV6_phe_827_3_23 = ASV6_phe_827_3_23,
+  ASV6_phe_827_24_45 = ASV6_phe_827_24_45,
+  ASV6_phe_827_46_52 = ASV6_phe_827_46_52,
+  
+  ASV6_phe_5642b = ASV6_phe_5642b,
+  ASV6_phe_5642b_0_2 = ASV6_phe_5642b_0_2,
+  ASV6_phe_5642b_3_23 = ASV6_phe_5642b_3_23,
+  ASV6_phe_5642b_24_45 = ASV6_phe_5642b_24_45,
+  ASV6_phe_5642b_46_52 = ASV6_phe_5642b_46_52,
+  
+  ASV6_phe_mixmiR = ASV6_phe_mixmiR,
+  ASV6_phe_mixmiR_0_2 = ASV6_phe_mixmiR_0_2,
+  ASV6_phe_mixmiR_3_23 = ASV6_phe_mixmiR_3_23,
+  ASV6_phe_mixmiR_24_45 = ASV6_phe_mixmiR_24_45,
+  ASV6_phe_mixmiR_46_52 = ASV6_phe_mixmiR_46_52,
+
+  # ASV172 subsets
+  ASV172_158a3p = ASV172_158a3p,
+  ASV172_158a3p_0_3 = ASV172_158a3p_0_3,
+  ASV172_158a3p_4_28 = ASV172_158a3p_4_28,
+  ASV172_158a3p_29_52 = ASV172_158a3p_29_52,
+  
+  ASV172_158b = ASV172_158b,
+  ASV172_158b_0_3 = ASV172_158b_0_3,
+  ASV172_158b_4_28 = ASV172_158b_4_28,
+  ASV172_158b_29_52 = ASV172_158b_29_52,
+  
+  ASV172_159 = ASV172_159,
+  ASV172_159_0_3 = ASV172_159_0_3,
+  ASV172_159_4_28 = ASV172_159_4_28,
+  ASV172_159_29_52 = ASV172_159_29_52,
+  
+  ASV172_827 = ASV172_827,
+  ASV172_827_0_3 = ASV172_827_0_3,
+  ASV172_827_4_28 = ASV172_827_4_28,
+  ASV172_827_29_52 = ASV172_827_29_52,
+  
+  ASV172_5642b = ASV172_5642b,
+  ASV172_5642b_0_3 = ASV172_5642b_0_3,
+  ASV172_5642b_4_28 = ASV172_5642b_4_28,
+  ASV172_5642b_29_52 =  ASV172_5642b_29_52,
+  
+    ASV172_mixmiR = ASV172_mixmiR,
+  ASV172_mixmiR_0_3 = ASV172_mixmiR_0_3,
+  ASV172_mixmiR_4_28 = ASV172_mixmiR_4_28,
+  ASV172_mixmiR_29_52 = ASV172_mixmiR_29_52
+)
+```
+
+#Calculating AUC with time interval
+```{r}
+# List to store AUC results for each subset, miRNA, and replicate
+results_list <- list()
+
+# Calculate AUC for each subset, miRNA, and replicate
+for (name in names(subset_list)) {
+  subset_data <- subset_list[[name]]
+  
+  # Convert miRNA column to character to avoid factor issues
+  subset_data$miRNA <- as.character(subset_data$miRNA)
+  
+  # Get unique miRNAs in the subset
+  miRNA_types <- unique(subset_data$miRNA)
+  
+  # Initialize a list to store AUC for each miRNA
+  auc_miRNA <- list()
+  
+  # Loop through each miRNA type
+  for (miRNA_type in miRNA_types) {
+    # Subset data for the current miRNA
+    miRNA_data <- subset(subset_data, miRNA == miRNA_type)
+    
+    # Get unique replicates in the subset for the current miRNA
+    replicates <- unique(miRNA_data$Replicate)
+    
+    # Initialize a vector to store AUC for each replicate
+    auc_replicate <- numeric(length(replicates))
+    names(auc_replicate) <- replicates
+    
+    # Calculate AUC for each replicate
+    for (rep in replicates) {
+      # Subset data for both miRNA and replicate
+      replicate_data <- subset(miRNA_data, Replicate == rep)
+      
+      # Convert Time and OD_600 to numeric
+      replicate_data$Time <- as.numeric(replicate_data$Time)
+      replicate_data$OD_600 <- as.numeric(replicate_data$OD_600)
+      
+      # Check for missing or non-numeric values
+      if (any(is.na(replicate_data$Time)) || any(is.na(replicate_data$OD_600))) {
+        warning(paste("Missing values in", name, "for miRNA", miRNA_type, "replicate", rep))
+      } else {
+        # Calculate AUC using the trapz function
+        auc_replicate[rep] <- trapz(replicate_data$Time, replicate_data$OD_600)
+        
+        # Calculate the time interval
+        Time_interval <- max(replicate_data$Time) - min(replicate_data$Time)
+        
+        # Extract ASV and N_source from replicate_data
+        ASV <- unique(replicate_data$ASV)
+        N_source <- unique(replicate_data$N_souce)
+        
+        # Store the results in a data frame
+        auc_data <- data.frame(
+          ASV = ASV,
+          N_source = N_source,
+          miRNA = miRNA_type,
+          Replicate = rep,
+          AUC = auc_replicate[rep],
+          Time_interval = Time_interval
+        )
+        
+        # Append to results list
+        results_list[[length(results_list) + 1]] <- auc_data
+      }
+    }
+  }
+}
+
+# Combine all data frames into one
+final_results_df <- do.call(rbind, results_list)
+
+# Print the final results data frame
+print(final_results_df)
+
+```
+
+#Subsetting data from final_results_df
+```{r}
+# Separating ASVs
+ASV4_AUC <- final_results_df %>% filter(ASV == "4")
+ASV6_AUC <- final_results_df %>% filter(ASV == "6")
+ASV6_mix_AUC <- ASV6_AUC %>% filter(N_source == "Mix_17aa")
+ASV6_phe_AUC <- ASV6_AUC %>% filter(N_source == "Phenyalanine")
+ASV172_AUC <- final_results_df %>% filter(ASV == "172")
+
+# Subsetting by miRNA treatment 
+ASV4_158a3p_AUC <- subset(ASV4_AUC, miRNA %in% c('p158a', 'sc158a')) 
+ASV4_158b_AUC <- subset(ASV4_AUC, miRNA %in% c('p158b', 'sc158b'))
+ASV4_159_AUC <- subset(ASV4_AUC, miRNA %in% c('p159', 'sc159'))
+ASV4_827_AUC <- subset(ASV4_AUC, miRNA %in% c('p827', 'sc827'))
+ASV4_5642b_AUC <- subset(ASV4_AUC, miRNA %in% c('p5642b', 'sc5642b'))
+ASV4_mixmiR_AUC <- subset(ASV4_AUC, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV4_158a3p
+ASV4_158a3p_0_32_AUC <- subset(ASV4_158a3p_AUC, Time_interval==32)
+ASV4_158a3p_33_52_AUC <- subset(ASV4_158a3p_AUC, Time_interval==19)
+
+# Subsetting ASV4_158b
+ASV4_158b_0_32_AUC <- subset(ASV4_158b_AUC, Time_interval==32)
+ASV4_158b_33_52_AUC <- subset(ASV4_158b_AUC, Time_interval==19)
+
+# Subsetting ASV4_159
+ASV4_159_0_32_AUC <- subset(ASV4_159_AUC, Time_interval==32)
+ASV4_159_33_52_AUC <- subset(ASV4_159_AUC, Time_interval==19)
+
+# Subsetting ASV4_827
+ASV4_827_0_32_AUC <- subset(ASV4_827_AUC, Time_interval==32)
+ASV4_827_33_52_AUC <- subset(ASV4_827_AUC, Time_interval==19)
+
+# Subsetting ASV4_5642b
+ASV4_5642b_0_32_AUC <- subset(ASV4_5642b_AUC, Time_interval==32)
+ASV4_5642b_33_52_AUC <- subset(ASV4_5642b_AUC, Time_interval==19)
+
+# Subsetting ASV4_mixmiR
+ASV4_mixmiR_0_32_AUC <- subset(ASV4_mixmiR_AUC, Time_interval==32)
+ASV4_mixmiR_33_52_AUC <- subset(ASV4_mixmiR_AUC, Time_interval==19)
+
+ASV6_mix_158a3p_AUC <- subset(ASV6_mix_AUC, miRNA %in% c('p158a', 'sc158a')) 
+ASV6_mix_158b_AUC <- subset(ASV6_mix_AUC, miRNA %in% c('p158b', 'sc158b'))
+ASV6_mix_159_AUC <- subset(ASV6_mix_AUC, miRNA %in% c('p159', 'sc159'))
+ASV6_mix_827_AUC <- subset(ASV6_mix_AUC, miRNA %in% c('p827', 'sc827'))
+ASV6_mix_5642b_AUC <- subset(ASV6_mix_AUC, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_mix_mixmiR_AUC <- subset(ASV6_mix_AUC, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV6_mix_158a3p
+ASV6_mix_158a3p_0_14_AUC <- subset(ASV6_mix_158a3p_AUC, Time_interval==13)
+ASV6_mix_158a3p_14_52_AUC <- subset(ASV6_mix_158a3p_AUC, Time_interval==38)
+
+# Subsetting ASV6_mix_158b
+ASV6_mix_158b_0_14_AUC <- subset(ASV6_mix_158b_AUC, Time_interval==13)
+ASV6_mix_158b_14_52_AUC <- subset(ASV6_mix_158b_AUC, Time_interval==38)
+
+# Subsetting ASV6_mix_159
+ASV6_mix_159_0_14_AUC <- subset(ASV6_mix_159_AUC, Time_interval==13)
+ASV6_mix_159_14_52_AUC <- subset(ASV6_mix_159_AUC, Time_interval==38)
+
+# Subsetting ASV6_mix_827
+ASV6_mix_827_0_14_AUC <- subset(ASV6_mix_827_AUC, Time_interval==13)
+ASV6_mix_827_14_52_AUC <- subset(ASV6_mix_827_AUC, Time_interval==38)
+
+# Subsetting ASV6_mix_5642b
+ASV6_mix_5642b_0_14_AUC <- subset(ASV6_mix_5642b_AUC, Time_interval==13)
+ASV6_mix_5642b_14_52_AUC <- subset(ASV6_mix_5642b_AUC, Time_interval==38)
+
+# Subsetting ASV6_mix_mixmiR
+ASV6_mix_mixmiR_0_14_AUC <- subset(ASV6_mix_mixmiR_AUC, Time_interval==13)
+ASV6_mix_mixmiR_14_52_AUC <- subset(ASV6_mix_mixmiR_AUC, Time_interval==38)
+
+ASV6_phe_158a3p_AUC <- subset(ASV6_phe_AUC, miRNA %in% c('p158a', 'sc158a'))
+ASV6_phe_158b_AUC <- subset(ASV6_phe_AUC, miRNA %in% c('p158b', 'sc158b'))
+ASV6_phe_159_AUC <- subset(ASV6_phe_AUC, miRNA %in% c('p159', 'sc159'))
+ASV6_phe_827_AUC <- subset(ASV6_phe_AUC, miRNA %in% c('p827', 'sc827'))
+ASV6_phe_5642b_AUC <- subset(ASV6_phe_AUC, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_phe_mixmiR_AUC <- subset(ASV6_phe_AUC, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV6_phe_158a3p
+ASV6_phe_158a3p_0_2_AUC <- subset(ASV6_phe_158a3p_AUC, Time_interval==2)
+ASV6_phe_158a3p_3_23_AUC <- subset(ASV6_phe_158a3p_AUC, Time_interval==20)
+ASV6_phe_158a3p_24_45_AUC <- subset(ASV6_phe_158a3p_AUC, Time_interval==21)
+ASV6_phe_158a3p_46_52_AUC <- subset(ASV6_phe_158a3p_AUC, Time_interval==6)
+
+# Subsetting ASV6_phe_158b
+ASV6_phe_158b_0_2_AUC <- subset(ASV6_phe_158b_AUC, Time_interval==2)
+ASV6_phe_158b_3_23_AUC <- subset(ASV6_phe_158b_AUC, Time_interval==20)
+ASV6_phe_158b_24_45_AUC <- subset(ASV6_phe_158b_AUC, Time_interval==21)
+ASV6_phe_158b_46_52_AUC <- subset(ASV6_phe_158b_AUC, Time_interval==6)
+
+# Subsetting ASV6_phe_159
+ASV6_phe_159_0_2_AUC <- subset(ASV6_phe_159_AUC, Time_interval==2)
+ASV6_phe_159_3_23_AUC <- subset(ASV6_phe_159_AUC, Time_interval==20)
+ASV6_phe_159_24_45_AUC <- subset(ASV6_phe_159_AUC, Time_interval==21)
+ASV6_phe_159_46_52_AUC <- subset(ASV6_phe_159_AUC, Time_interval==6)
+
+# Subsetting ASV6_phe_827
+ASV6_phe_827_0_2_AUC <- subset(ASV6_phe_827_AUC, Time_interval==2)
+ASV6_phe_827_3_23_AUC <- subset(ASV6_phe_827_AUC, Time_interval==20)
+ASV6_phe_827_24_45_AUC <- subset(ASV6_phe_827_AUC, Time_interval==21)
+ASV6_phe_827_46_52_AUC <- subset(ASV6_phe_827_AUC, Time_interval==6)
+
+# Subsetting ASV6_phe_5642b
+ASV6_phe_5642b_0_2_AUC <- subset(ASV6_phe_5642b_AUC, Time_interval==2)
+ASV6_phe_5642b_3_23_AUC <- subset(ASV6_phe_5642b_AUC, Time_interval==20)
+ASV6_phe_5642b_24_45_AUC <- subset(ASV6_phe_5642b_AUC, Time_interval==21)
+ASV6_phe_5642b_46_52_AUC <- subset(ASV6_phe_5642b_AUC, Time_interval==6)
+
+# Subsetting ASV6_phe_mixmiR
+ASV6_phe_mixmiR_0_2_AUC <- subset(ASV6_phe_mixmiR_AUC, Time_interval==2)
+ASV6_phe_mixmiR_3_23_AUC <- subset(ASV6_phe_mixmiR_AUC, Time_interval==20)
+ASV6_phe_mixmiR_24_45_AUC <- subset(ASV6_phe_mixmiR_AUC, Time_interval==21)
+ASV6_phe_mixmiR_46_52_AUC <- subset(ASV6_phe_mixmiR_AUC, Time_interval==6)
+
+ASV172_158a3p_AUC <- subset(ASV172_AUC, miRNA %in% c('p158a', 'sc158a')) 
+ASV172_158b_AUC <- subset(ASV172_AUC, miRNA %in% c('p158b', 'sc158b'))
+ASV172_159_AUC <- subset(ASV172_AUC, miRNA %in% c('p159', 'sc159'))
+ASV172_827_AUC <- subset(ASV172_AUC, miRNA %in% c('p827', 'sc827'))
+ASV172_5642b_AUC <- subset(ASV172_AUC, miRNA %in% c('p5642b', 'sc5642b'))
+ASV172_mixmiR_AUC <- subset(ASV172_AUC, miRNA %in% c('p_mix', 'sc_mix'))
+
+# Subsetting ASV172_158a3p
+ASV172_158a3p_0_3_AUC <- subset(ASV172_158a3p_AUC, Time_interval==3)
+ASV172_158a3p_4_28_AUC <- subset(ASV172_158a3p_AUC, Time_interval==24)
+ASV172_158a3p_29_52_AUC <- subset(ASV172_158a3p_AUC, Time_interval==23)
+
+# Subsetting ASV172_158b
+ASV172_158b_0_3_AUC <- subset(ASV172_158b_AUC,  Time_interval==3)
+ASV172_158b_4_28_AUC <- subset(ASV172_158b_AUC, Time_interval==24)
+ASV172_158b_29_52_AUC <- subset(ASV172_158b_AUC, Time_interval==23)
+
+# Subsetting ASV172_159
+ASV172_159_0_3_AUC <- subset(ASV172_159_AUC,  Time_interval==3)
+ASV172_159_4_28_AUC <- subset(ASV172_159_AUC, Time_interval==24)
+ASV172_159_29_52_AUC <- subset(ASV172_159_AUC, Time_interval==23)
+
+# Subsetting ASV172_827
+ASV172_827_0_3_AUC <- subset(ASV172_827_AUC,  Time_interval==3)
+ASV172_827_4_28_AUC <- subset(ASV172_827_AUC, Time_interval==24)
+ASV172_827_29_52_AUC <- subset(ASV172_827_AUC, Time_interval==23)
+
+# Subsetting ASV172_5642b
+ASV172_5642b_0_3_AUC <- subset(ASV172_5642b_AUC,  Time_interval==3)
+ASV172_5642b_4_28_AUC <- subset(ASV172_5642b_AUC, Time_interval==24)
+ASV172_5642b_29_52_AUC <- subset(ASV172_5642b_AUC, Time_interval==23)
+
+# Subsetting ASV172_mixmiR
+ASV172_mixmiR_0_3_AUC <- subset(ASV172_mixmiR_AUC,  Time_interval==3)
+ASV172_mixmiR_4_28_AUC <- subset(ASV172_mixmiR_AUC, Time_interval==24)
+ASV172_mixmiR_29_52_AUC <- subset(ASV172_mixmiR_AUC, Time_interval==23)
+
+
+```
+
+#Paired t-test
+```{r}
+
+# Remove all files in the output folder
+unlink(here("Output", "test_AUC", "*"), recursive = TRUE)
+
+# List of all subsets
+subset_names <- c(
+  "ASV4_158a3p_0_32_AUC", "ASV4_158a3p_33_52_AUC",
+  "ASV4_158b_0_32_AUC", "ASV4_158b_33_52_AUC",
+  "ASV4_159_0_32_AUC", "ASV4_159_33_52_AUC",
+  "ASV4_827_0_32_AUC", "ASV4_827_33_52_AUC",
+  "ASV4_5642b_0_32_AUC", "ASV4_5642b_33_52_AUC",
+  "ASV4_mixmiR_0_32_AUC", "ASV4_mixmiR_33_52_AUC",
+  "ASV6_mix_158a3p_0_14_AUC", "ASV6_mix_158a3p_14_52_AUC",
+  "ASV6_mix_158b_0_14_AUC", "ASV6_mix_158b_14_52_AUC",
+  "ASV6_mix_159_0_14_AUC", "ASV6_mix_159_14_52_AUC",
+  "ASV6_mix_827_0_14_AUC", "ASV6_mix_827_14_52_AUC",
+  "ASV6_mix_5642b_0_14_AUC", "ASV6_mix_5642b_14_52_AUC",
+  "ASV6_mix_mixmiR_0_14_AUC", "ASV6_mix_mixmiR_14_52_AUC",
+  "ASV6_phe_158a3p_0_2_AUC", "ASV6_phe_158a3p_3_23_AUC", "ASV6_phe_158a3p_24_45_AUC", "ASV6_phe_158a3p_46_52_AUC",
+  "ASV6_phe_158b_0_2_AUC", "ASV6_phe_158b_3_23_AUC", "ASV6_phe_158b_24_45_AUC", "ASV6_phe_158b_46_52_AUC",
+  "ASV6_phe_159_0_2_AUC", "ASV6_phe_159_3_23_AUC", "ASV6_phe_159_24_45_AUC", "ASV6_phe_159_46_52_AUC",
+  "ASV6_phe_827_0_2_AUC", "ASV6_phe_827_3_23_AUC", "ASV6_phe_827_24_45_AUC", "ASV6_phe_827_46_52_AUC",
+  "ASV6_phe_5642b_0_2_AUC", "ASV6_phe_5642b_3_23_AUC", "ASV6_phe_5642b_24_45_AUC", "ASV6_phe_5642b_46_52_AUC",
+  "ASV6_phe_mixmiR_0_2_AUC", "ASV6_phe_mixmiR_3_23_AUC", "ASV6_phe_mixmiR_24_45_AUC", "ASV6_phe_mixmiR_46_52_AUC",
+  "ASV172_158a3p_0_3_AUC", "ASV172_158a3p_4_28_AUC", "ASV172_158a3p_29_52_AUC",
+  "ASV172_158b_0_3_AUC", "ASV172_158b_4_28_AUC", "ASV172_158b_29_52_AUC",
+  "ASV172_159_0_3_AUC", "ASV172_159_4_28_AUC", "ASV172_159_29_52_AUC",
+  "ASV172_827_0_3_AUC", "ASV172_827_4_28_AUC", "ASV172_827_29_52_AUC",
+  "ASV172_5642b_0_3_AUC", "ASV172_5642b_4_28_AUC", "ASV172_5642b_29_52_AUC",
+  "ASV172_mixmiR_0_3_AUC", "ASV172_mixmiR_4_28_AUC", "ASV172_mixmiR_29_52_AUC"
+)
+
+
+
+# Loop through each subset
+for (subset_name in subset_names) {
+  # Get the subset data
+  subset_data <- get(subset_name)
+  
+  # Check if the subset is empty
+  if (nrow(subset_data) == 0) {
+    next
+  }
+  
+  # Extract and order Plant data
+  plant <- subset_data[grep("^p", subset_data$miRNA), ]
+  planto <- plant[order(plant$Replicate), ]
+  mirplant <- planto$AUC
+  
+  # Extract and order Scramble data
+  scram <- subset_data[grep("^sc", subset_data$miRNA), ]
+  scramo <- scram[order(scram$Replicate), ]
+  mirscram <- scramo$AUC
+  
+  # Calculate differences and identify outliers
+  differences <- as.data.frame(mirscram - mirplant)
+  outliers <- identify_outliers(differences)
+  test_shapiro <- shapiro_test(differences$`mirscram - mirplant`)
+  
+  # Check for outliers or normality
+  if (nrow(outliers) >= 1 || test_shapiro$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_shapiro$p.value, 
+        "Statistic:", test_shapiro$statistic, 
+        "Outliers:", outliers$is.outlier, 
+        "\n", 
+        file = here("Output", "test_AUC", paste0(subset_name, ".txt")), 
+        append = TRUE)
+  }
+  
+  # Perform t-test (paired, one-sided, greater)
+  test_t <- t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+  
+  if (test_t$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_t$p.value, 
+        "statistic:", test_t$statistic, 
+        "\n", 
+        file = here("Output", "test_AUC", paste0(subset_name, "_t.test_greater.txt")), 
+        append = TRUE)
+  }
+  
+  # Perform t-test (paired, one-sided, less)
+  test_t <- t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+  
+  if (test_t$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_t$p.value, 
+        "statistic:", test_t$statistic, 
+        "\n", 
+        file = here("Output", "test_AUC", paste0(subset_name, "_t.test_less.txt")), 
+        append = TRUE)
+  }
+}
+
+
+```
+
+#AUC for Raoultella AA mix 
+```{r}
+#removing controls 
+Raoul_AA2 <- Raoul_AA[!Raoul_AA$Treatment=="Control",]
+
+#subsetting raoul_AA by growth phase
+Raoul_AA_0_8 <- subset(Raoul_AA2, Time >= 0 & Time <= 8)
+Raoul_AA_9_52 <- subset(Raoul_AA2, Time >= 9 & Time <= 52)
+
+# Define a custom AUC calculation function
+calculate_auc <- function(data, x_col, y_col) {
+  x <- data[[x_col]]  # Date column
+  y <- data[[y_col]]  # Data column
+  trapz(x, y)  # Calculate AUC using trapezoidal rule
+}
+
+# Select columns with data for AUC calculation
+data_cols <- names(Raoul_AA_0_8)[9]  
+
+# Group by Treatment, miRNA and replicate
+AUC_Raoul_AA_0_8<- Raoul_AA_0_8 %>%
+  group_by(Treatment,miRNA,Replicate) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+# View the result
+print(AUC_Raoul_AA_0_8)
+
+
+# Select columns with data for AUC calculation
+data_cols <- names(Raoul_AA_9_52)[9]  
+
+# Group by Treatment, miRNA and replicate
+AUC_Raoul_AA_9_52<- Raoul_AA_9_52 %>%
+  group_by(Treatment,miRNA,Replicate) %>%
+  summarise(
+    across(all_of(data_cols), ~ calculate_auc(cur_data(), "Time", cur_column()), .names = "AUC_{.col}")
+  )
+
+# View the result
+print(AUC_Raoul_AA_9_52)
+
+
+
+```
+
+##T-test AUC 0_8 
+```{r}
+# Loop through each miRNA
+for (miR in unique(AUC_Raoul_AA_0_8$miRNA)) {
+
+  # Subset the data for the current miRNA
+  subset_data <- AUC_Raoul_AA_0_8[AUC_Raoul_AA_0_8$miRNA == miR, ]
+
+  # Check if the subset is empty
+  if (nrow(subset_data) == 0) {
+    next
+  }
+
+  # Define a name for output
+  subset_name <- miR
+
+  # Extract and order Plant data
+  plant <- subset_data[subset_data$Treatment == "Plant", ]
+  planto <- plant[order(plant$Replicate), ]
+  mirplant <- planto$AUC_OD_600
+
+  # Extract and order Scramble data
+  scram <- subset_data[subset_data$Treatment == "Scramble", ]
+  scramo <- scram[order(scram$Replicate), ]
+  mirscram <- scramo$AUC_OD_600
+
+  # Calculate differences and identify outliers
+  differences <- as.data.frame(mirscram - mirplant)
+  colnames(differences) <- "diff"
+  outliers <- identify_outliers(differences)
+  test_shapiro <- shapiro_test(differences$diff)
+
+  # Check for outliers or normality
+  if (test_shapiro$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_shapiro$p.value, 
+        "Statistic:", test_shapiro$statistic, 
+        "Outliers:", outliers$is.outlier, 
+        "\n", 
+        file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_0_8_17AA_Assump.txt")), 
+        append = TRUE)
+
+    # Perform Wilcoxon test (paired, one-sided, greater)
+    test_wilcox_greater <- wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+    if (test_wilcox_greater$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "Wilcoxon greater p.value:", test_wilcox_greater$p.value, 
+          "statistic:", test_wilcox_greater$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC_0_8", paste0(subset_name, "_Raoul_0_8_17AA_t.test.greater.txt")), 
+          append = TRUE)
+    }
+
+    # Perform Wilcoxon test (paired, one-sided, less)
+    test_wilcox_less <- wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+    if (test_wilcox_less$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "T test less p.value:", test_wilcox_less$p.value, 
+          "statistic:", test_wilcox_less$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_0_8_17AA_t.test.less.txt")), 
+          append = TRUE)
+    }
+
+  } else 
+    
+  {
+  differences <- as.data.frame(mirscram - mirplant)
+  colnames(differences) <- "diff"
+  outliers <- identify_outliers(differences)
+  test_shapiro <- shapiro_test(differences$diff)
+    
+    cat("Subset:", subset_name, 
+        "p.value:", test_shapiro$p.value, 
+        "Statistic:", test_shapiro$statistic, 
+        "Outliers:", outliers$is.outlier, 
+        "\n", 
+        file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_0_8_17AA__Assump.txt")), 
+        append = TRUE)
+    
+    {
+    # Assumptions met, perform t-tests
+    test_t_greater <- t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+    if (test_t_greater$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "t-test greater p.value:", test_t_greater$p.value, 
+          "statistic:", test_t_greater$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_0_8_17AA__t.test_greater.txt")), 
+          append = TRUE)
+    }
+
+    test_t_less <- t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+    if (test_t_less$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "t-test less p.value:", test_t_less$p.value, 
+          "statistic:", test_t_less$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_0_8_17AA__t.test_less.txt")), 
+          append = TRUE)
+    }
+  }
+  }
+}
+
+```
+
+##T-test AUC 9_52 
+```{r}
+# Loop through each miRNA
+for (miR in unique(AUC_Raoul_AA_9_52$miRNA)) {
+
+  # Subset the data for the current miRNA
+  subset_data <- AUC_Raoul_AA_9_52[AUC_Raoul_AA_9_52$miRNA == miR, ]
+
+  # Check if the subset is empty
+  if (nrow(subset_data) == 0) {
+    next
+  }
+
+  # Define a name for output
+  subset_name <- miR
+
+  # Extract and order Plant data
+  plant <- subset_data[subset_data$Treatment == "Plant", ]
+  planto <- plant[order(plant$Replicate), ]
+  mirplant <- planto$AUC_OD_600
+
+  # Extract and order Scramble data
+  scram <- subset_data[subset_data$Treatment == "Scramble", ]
+  scramo <- scram[order(scram$Replicate), ]
+  mirscram <- scramo$AUC_OD_600
+
+  # Calculate differences and identify outliers
+  differences <- as.data.frame(mirscram - mirplant)
+  colnames(differences) <- "diff"
+  outliers <- identify_outliers(differences)
+  test_shapiro <- shapiro_test(differences$diff)
+
+  # Check for outliers or normality
+  if (test_shapiro$p.value < 0.05) {
+    cat("Subset:", subset_name, 
+        "p.value:", test_shapiro$p.value, 
+        "Statistic:", test_shapiro$statistic, 
+        "Outliers:", outliers$is.outlier, 
+        "\n", 
+        file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_9_52_17AA_Assump.txt")), 
+        append = TRUE)
+
+    # Perform Wilcoxon test (paired, one-sided, greater)
+    test_wilcox_greater <- wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+    if (test_wilcox_greater$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "Wilcoxon greater p.value:", test_wilcox_greater$p.value, 
+          "statistic:", test_wilcox_greater$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_9_52_17AA_wilcox_greater.txt")), 
+          append = TRUE)
+    }
+
+    # Perform Wilcoxon test (paired, one-sided, less)
+    test_wilcox_less <- wilcox.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+    if (test_wilcox_less$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "Wilcoxon less p.value:", test_wilcox_less$p.value, 
+          "statistic:", test_wilcox_less$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_9_52_17AA_wilcox_less.txt")), 
+          append = TRUE)
+    }
+
+  } else 
+    
+  {
+  differences <- as.data.frame(mirscram - mirplant)
+  colnames(differences) <- "diff"
+  outliers <- identify_outliers(differences)
+  test_shapiro <- shapiro_test(differences$diff)
+    
+    cat("Subset:", subset_name, 
+        "p.value:", test_shapiro$p.value, 
+        "Statistic:", test_shapiro$statistic, 
+        "Outliers:", outliers$is.outlier, 
+        "\n", 
+        file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_9_52_17AA_Assump.txt")), 
+        append = TRUE)
+    
+    {
+    # Assumptions met, perform t-tests
+    test_t_greater <- t.test(mirplant, mirscram, paired = TRUE, alternative = "greater")
+    if (test_t_greater$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "t-test greater p.value:", test_t_greater$p.value, 
+          "statistic:", test_t_greater$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_9_52_17AA_t.test_greater.txt")), 
+          append = TRUE)
+    }
+
+    test_t_less <- t.test(mirplant, mirscram, paired = TRUE, alternative = "less")
+    if (test_t_less$p.value < 0.05) {
+      cat("Subset:", subset_name, 
+          "t-test less p.value:", test_t_less$p.value, 
+          "statistic:", test_t_less$statistic, 
+          "\n", 
+          file = here("Output", "test_AUC", paste0(subset_name, "_Raoul_9_52_17AA_t.test_less.txt")), 
+          append = TRUE)
+    }
+  }
+  }
+}
+
+```
+

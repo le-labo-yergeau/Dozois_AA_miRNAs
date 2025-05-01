@@ -1,0 +1,777 @@
+---
+title: "02_Boxplots"
+author: "Marc-Antoine Duchesne and Jessica A. Dozois"
+date: "2024-07-11"
+output: html_document
+---
+#Loading librairies
+```{r Librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,forcats,here,ggpubr,car,rstatix,stats)
+```
+
+#Creating folders
+```{r}
+dir.create(file.path("Output", "Figures"), recursive=TRUE)
+dir.create(file.path("Output", "ASV4_test"), recursive=TRUE)
+dir.create(file.path("Output", "ASV6_test"), recursive=TRUE)
+dir.create(file.path("Output", "ASV172_test"), recursive=TRUE)
+```
+
+#Importing data
+```{r Importation}
+plate1<-read.table(file.path("Raw_Data", "20240703_isolates_vs_miRNA_n1.csv"), header=T, sep=",", comment.char = "") # 2226 obs 8 variables
+#removing G10 well pair (+ G9) as there was condensation
+plate1<-plate1[!plate1$Well_ID=="G10",]
+plate1<-plate1[!plate1$Well_ID=="G9",]
+plate2<-read.table(file.path("Raw_Data", "20240705_isolates_vs_miRNA_n2.csv"), header=T, sep=",", comment.char = "") # 1484 obs 8 variables
+plate2.2<-read.table(file.path("Raw_Data", "20240712_isolates_vs_miRNAs_n2_retake.csv"), header=T, sep=",", comment.char = "") # 3920 obs 8 variables
+plate2.2 <- plate2.2[!(plate2.2$Time %in% c('53','54','55','56','57','58','59','60','61','62','63','64','65','66','67','68','69')), ]
+#removing extra time points
+plate2.2<-plate2.2[!plate2.2$ASV=='4',]# 2332 obs 8 variables
+
+plate3<-read.table(file.path("Raw_Data", "20240709_isolates_vs_miRNAs_n3.csv"), header=T, sep=",", comment.char = "") # 2968 obs 8 variables
+plate4<-read.table(file.path("Raw_Data", "20240714_isolates_vs_miRNAs_n4.csv"), header=T, sep=",", comment.char = "") #2226 obs 8 variables
+plate5<-read.table(file.path("Raw_Data", "20240717_isolates_vs_miRNAs_n5.csv"), header=T, sep=",", comment.char = "") #1456 obs 8 variables
+plate6<-read.table(file.path("Raw_Data", "20240719_isolates_vs_miRNAs_n6.csv"), header=T, sep=",", comment.char = "") #2530 obs 8 variables
+Raoul_AA<-read.table(file.path("Raw_Data", "Raoultella_Growth_17AA.csv"), header=T, sep=",", comment.char = "")
+#3392 obs. 9 variables
+
+Raoul_AA$Time<-as.numeric(Raoul_AA$Time)
+Raoul_AA$Replicate<-as.factor(Raoul_AA$Replicate)
+Raoul_AA$Dose.uM.<-as.factor(Raoul_AA$Dose.uM.)
+
+#fusing all the data
+Dosedf<-rbind(plate1,plate2,plate2.2,plate3,plate4,plate5,plate6) #15116 obs 8 variables
+
+Dosedf$Time<-as.numeric(Dosedf$Time)
+Dosedf$Replicate<-as.factor(Dosedf$Replicate)
+Dosedf$Dose.uM.<-as.factor(Dosedf$Dose.uM.)
+```
+
+#Subsetting data
+```{r}
+#Removing Controls
+Dosedf<-Dosedf[!Dosedf$ASV=="Control",]
+#Separating ASVs
+ASV4<-Dosedf[Dosedf$ASV=="4",] #3380 obs 8 variables
+ASV6<-Dosedf[Dosedf$ASV=="6",] #6360 obs 8 variables
+ASV6_mix<-ASV6[ASV6$N_souce=="Mix_17aa",] #3180 obs 8 variables
+ASV6_phe<-ASV6[ASV6$N_souce=="Phenyalanine",]#3180 obs 8 variables
+ASV172<-Dosedf[Dosedf$ASV=="172",] #3168 obs 8 variables
+
+#Subsetting by miRNA treatment 
+ASV4_158a3p <- subset(ASV4, miRNA %in% c('p158a', 'sc158a')) 
+ASV4_158b <- subset(ASV4, miRNA %in% c('p158b', 'sc158b'))
+ASV4_159 <- subset(ASV4, miRNA %in% c('p159', 'sc159'))
+ASV4_827 <- subset(ASV4, miRNA %in% c('p827', 'sc827'))
+ASV4_5642b <- subset(ASV4, miRNA %in% c('p5642b', 'sc5642b'))
+ASV4_mixmiR <- subset(ASV4, miRNA %in% c('p_mix', 'sc_mix'))
+
+ASV4_AA_158a3p <- subset(Raoul_AA, miRNA %in% 'ath-miR158a3p') 
+ASV4_AA_158b <- subset(Raoul_AA, miRNA %in% 'ath-miR158b')
+ASV4_AA_159 <- subset(Raoul_AA, miRNA %in% 'ath-miR159')
+ASV4_AA_827 <- subset(Raoul_AA, miRNA %in% 'ath-miR827')
+ASV4_AA_5642b <- subset(Raoul_AA, miRNA %in% 'ath-miR5642b')
+ASV4_AA_mixmiR <- subset(Raoul_AA, miRNA %in% 'Mix5')
+
+ASV6_mix_158a3p <- subset(ASV6_mix, miRNA %in% c('p158a', 'sc158a')) 
+ASV6_mix_158b <- subset(ASV6_mix, miRNA %in% c('p158b', 'sc158b'))
+ASV6_mix_159 <- subset(ASV6_mix, miRNA %in% c('p159', 'sc159'))
+ASV6_mix_827 <- subset(ASV6_mix, miRNA %in% c('p827', 'sc827'))
+ASV6_mix_5642b <- subset(ASV6_mix, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_mix_mixmiR <- subset(ASV6_mix, miRNA %in% c('p_mix', 'sc_mix'))
+
+
+ASV6_phe_158a3p <- subset(ASV6_phe, miRNA %in% c('p158a', 'sc158a'))
+ASV6_phe_158b <- subset(ASV6_phe, miRNA %in% c('p158b', 'sc158b'))
+ASV6_phe_159 <- subset(ASV6_phe, miRNA %in% c('p159', 'sc159'))
+ASV6_phe_827 <- subset(ASV6_phe, miRNA %in% c('p827', 'sc827'))
+ASV6_phe_5642b <- subset(ASV6_phe, miRNA %in% c('p5642b', 'sc5642b'))
+ASV6_phe_mixmiR <- subset(ASV6_phe, miRNA %in% c('p_mix', 'sc_mix'))
+
+
+ASV172_158a3p <- subset(ASV172, miRNA %in% c('p158a', 'sc158a')) 
+ASV172_158b <- subset(ASV172, miRNA %in% c('p158b', 'sc158b'))
+ASV172_159 <- subset(ASV172, miRNA %in% c('p159', 'sc159'))
+ASV172_827 <- subset(ASV172, miRNA %in% c('p827', 'sc827'))
+ASV172_5642b <- subset(ASV172, miRNA %in% c('p5642b', 'sc5642b'))
+ASV172_mixmiR <- subset(ASV172, miRNA %in% c('p_mix', 'sc_mix'))
+
+
+```
+
+#boxplot ASV4
+```{r}
+repli<-5
+#To customize the x-axis breaks
+custom_breaks <- seq(0, 52, by = 4)
+custom_labels <- custom_breaks
+
+ASV4_158a3p_mean<-ASV4_158a3p %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_158a3p<- ggplot(ASV4_158a3p_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,1.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158a-3p")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+annotate("rect",xmin = 18.5, xmax=19.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+annotate("rect",xmin = 22.5, xmax=23.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+annotate("rect",xmin = 34.5, xmax=37.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")
+boxASV4_158a3p
+
+ASV4_158b_mean<-ASV4_158b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_158b<- ggplot(ASV4_158b_mean, aes(x=Time, y=Mean, colour=miRNA))+   geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,1.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+  annotate("rect",xmin = 2.5, xmax=3.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 10.5, xmax=15.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 16.5, xmax=32.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 43.5, xmax=51.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")
+boxASV4_158b
+
+ASV4_159_mean<-ASV4_159 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_159<- ggplot(ASV4_159_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,1.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR159a")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+  annotate("rect",xmin = 15.5, xmax=16.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 32.5, xmax=33.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 34.5, xmax=35.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")
+boxASV4_159
+
+ASV4_827_mean<-ASV4_827 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_827<- ggplot(ASV4_827_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,1)+theme_pubclean()+
+  theme(legend.position="none")+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR827")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV4_827
+
+ASV4_5642b_mean<-ASV4_5642b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_5642b<- ggplot(ASV4_5642b_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,1.0)+theme_pubclean()+
+  theme(legend.position="none")+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR5642b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+  annotate("rect",xmin = 0.5, xmax=1.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 4.5, xmax=5.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 10.5, xmax=11.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 22.5, xmax=23.5, ymin = 0, ymax=1.0,alpha=.2, fill="steelblue4")
+boxASV4_5642b
+
+
+ASV4_mixmiR_mean<-ASV4_mixmiR %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_mixmiR<- ggplot(ASV4_mixmiR_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+   scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,1.0)+theme_pubclean()+
+  theme(legend.position="none")+
+  theme(axis.text.x=element_text(size=8))+ggtitle("Mix of 5 miRNAs (10 μM)")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV4_mixmiR
+
+
+ASV4_plot<-ggarrange(boxASV4_158a3p,boxASV4_158b,boxASV4_159,boxASV4_827,boxASV4_5642b,boxASV4_mixmiR,nrow=3,ncol=2,common.legend = T)
+
+  ASV4_plot1 <-annotate_figure(ASV4_plot,
+             bottom = text_grob("Time (hours)", size = 14),
+             left = text_grob("Optical density (600 nm)",size = 14, rot=90), top = text_grob(bquote(italic(Raoultella) ~ "(ASV#4) L-lysine"), size = 14))
+
+ASV4_plot1
+
+ggsave(ASV4_plot1, file=here("Output","Figures","ASV4_vs_miRNAs.tiff"),width = 28, height = 28, units = "cm")
+
+```
+#boxplot ASV 4 mix AA
+```{r}
+repli<-5
+#To customize the x-axis breaks
+custom_breaks <- seq(0, 52, by = 4)
+custom_labels <- custom_breaks
+
+ASV4_AA_158a3p_mean<-ASV4_AA_158a3p %>%
+  group_by(Time,Treatment) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_AA_158a3p<- ggplot(ASV4_AA_158a3p_mean, aes(x=Time, y=Mean, colour=Treatment)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,3.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158a-3p")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV4_AA_158a3p
+
+ASV4_AA_158b_mean<-ASV4_AA_158b %>%
+  group_by(Time,Treatment) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_AA_158b<- ggplot(ASV4_AA_158b_mean, aes(x=Time, y=Mean, colour=Treatment))+   geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0.0,3.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+  annotate("rect",xmin = 9.5, xmax=18.5, ymin = 0, ymax=3.0,alpha=.2, fill="steelblue4")
+boxASV4_AA_158b
+
+ASV4_AA_159_mean<-ASV4_AA_159 %>%
+  group_by(Time,Treatment) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_AA_159<- ggplot(ASV4_AA_159_mean, aes(x=Time, y=Mean, colour=Treatment)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant Treatments","Scramble Treatments"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant Treatments", "Scramble Treatments")) +
+  labs(x="", y="")+ ylim(0,3.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR159a")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV4_AA_159
+
+ASV4_AA_827_mean<-ASV4_AA_827 %>%
+  group_by(Time,Treatment) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_AA_827<- ggplot(ASV4_AA_827_mean, aes(x=Time, y=Mean, colour=Treatment)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant Treatments","Scramble Treatments"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant Treatments", "Scramble Treatments")) +
+  labs(x="", y="")+ ylim(0,3)+theme_pubclean()+
+  theme(legend.position="none")+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR827")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV4_AA_827
+
+ASV4_AA_5642b_mean<-ASV4_AA_5642b %>%
+  group_by(Time,Treatment) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_AA_5642b<- ggplot(ASV4_AA_5642b_mean, aes(x=Time, y=Mean, colour=Treatment)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant Treatments","Scramble Treatments"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant Treatments", "Scramble Treatments")) +
+  labs(x="", y="")+ ylim(0,3.0)+theme_pubclean()+
+  theme(legend.position="none")+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR5642b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV4_AA_5642b
+
+
+ASV4_AA_mixmiR_mean<-ASV4_AA_mixmiR %>%
+  group_by(Time,Treatment) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV4_AA_mixmiR<- ggplot(ASV4_AA_mixmiR_mean, aes(x=Time, y=Mean, colour=Treatment)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+   scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant Treatments","Scramble Treatments"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant Treatments", "Scramble Treatments")) +
+  labs(x="", y="")+ ylim(0,3.0)+theme_pubclean()+
+  theme(legend.position="none")+
+  theme(axis.text.x=element_text(size=8))+ggtitle("Mix of 5 miRNAs (10 μM)")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV4_AA_mixmiR
+
+
+ASV4_AA_plot<-ggarrange(boxASV4_AA_158a3p,boxASV4_AA_158b,boxASV4_AA_159,boxASV4_AA_827,boxASV4_AA_5642b,boxASV4_AA_mixmiR,nrow=3,ncol=2,common.legend = T)
+
+  ASV4_AA_plot1 <-annotate_figure(ASV4_AA_plot,
+             bottom = text_grob("Time (hours)", size = 14),
+             left = text_grob("Optical density (600 nm)",size = 14, rot=90), top = text_grob(bquote(italic(Raoultella) ~ "(ASV#4) L-lysine"), size = 14))
+
+ASV4_AA_plot1
+
+ggsave(ASV4_AA_plot1, file=here("Output","Figures","ASV4_AA_vs_miRNAs.tiff"),width = 28, height = 28, units = "cm")
+
+```
+
+#boxplot ASV6 mix of amino acids
+```{r}
+repli<-5
+#To customize the x-axis breaks
+custom_breaks <- seq(0, 52, by = 4)
+custom_labels <- custom_breaks
+
+ASV6_mix_158a3p_mean<-ASV6_mix_158a3p %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_mix_158a3p<- ggplot(ASV6_mix_158a3p_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2.5)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158a-3p")+ 
+  theme(legend.title = element_blank())+
+  annotate("rect",xmin = 1.5, xmax=2.5, ymin = 0, ymax=2.5,alpha=.2, fill="steelblue4")+scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+
+boxASV6_mix_158a3p
+
+ASV6_mix_158b_mean<-ASV6_mix_158b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_mix_158b<- ggplot(ASV6_mix_158b_mean, aes(x=Time, y=Mean, colour=miRNA)) +geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV6_mix_158b
+
+ASV6_mix_159_mean<-ASV6_mix_159 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_mix_159<- ggplot(ASV6_mix_159_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR159a")+scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV6_mix_159
+
+ASV6_mix_827_mean<-ASV6_mix_827 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_mix_827<- ggplot(ASV6_mix_827_mean, aes(x=Time, y=Mean,colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  theme_classic() + 
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR827")+
+  theme(legend.title = element_blank())+
+  annotate("rect",xmin = -0.5, xmax=1.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 2.5, xmax=3.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV6_mix_827
+
+ASV6_mix_5642b_mean<-ASV6_mix_5642b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_mix_5642b<- ggplot(ASV6_mix_5642b_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  theme_classic() + 
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2.0)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR5642b")+
+   theme(legend.title = element_blank())+  # Remove legend title
+  annotate("rect",xmin = 5.5, xmax=8.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+
+   annotate("rect",xmin = 11.5, xmax=12.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+
+   annotate("rect",xmin = 48.5, xmax=49.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+
+   annotate("rect",xmin = 50.5, xmax=51.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV6_mix_5642b
+
+ASV6_mix_mixmiR_mean<-ASV6_mix_mixmiR %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_mix_mixmiR <- ggplot(ASV6_mix_mixmiR_mean, aes(x = Time, y = Mean, colour = miRNA, linetype = miRNA)) +
+  geom_errorbar(alpha = 0.4, aes(ymin = Mean - se, ymax = Mean + se), width = 0.3, position = position_dodge(1)) +
+  geom_line(alpha = 0.6) +
+  geom_point(position = position_dodge(1)) +
+  scale_colour_manual(values = c("#2a7f62", "#003049"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x = "", y = "") + 
+  ylim(0, 2.0) +
+  theme_pubclean() +
+  theme(axis.text.x = element_text(size = 8)) +
+  ggtitle("mix of 5 miRNAs (10 μM)") +
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels) +
+  theme(legend.title = element_blank())  # Remove legend title
+boxASV6_mix_mixmiR
+
+ASV6_mix_plot<-ggarrange(boxASV6_mix_158a3p,boxASV6_mix_158b,boxASV6_mix_159,boxASV6_mix_827,boxASV6_mix_5642b,boxASV6_mix_mixmiR,nrow=3,ncol=2,common.legend = T)
+
+  ASV6_mix_plot1 <-annotate_figure(ASV6_mix_plot,
+             bottom = text_grob("Time (hours)", size = 14),
+             left = text_grob("Optical density (600 nm)",size = 14, rot=90), top = text_grob(bquote(italic(Acinetobacter) ~ "(ASV#6) 17 AA mix"), size = 14))
+
+ASV6_mix_plot1
+
+ggsave(ASV6_mix_plot1, file=here("Output","Figures","ASV6_mix_vs_miRNAs.tiff"),width = 28, height = 28, units = "cm")
+
+```
+
+#boxplot ASV6 phe
+```{r}
+repli<-5
+#To customize the x-axis breaks
+custom_breaks <- seq(0, 52, by = 4)
+custom_labels <- custom_breaks
+
+ASV6_phe_158a3p_mean<-ASV6_phe_158a3p %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_phe_158a3p<- ggplot(ASV6_phe_158a3p_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,0.6)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158a-3p")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV6_phe_158a3p
+
+ASV6_phe_158b_mean<-ASV6_phe_158b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_phe_158b<- ggplot(ASV6_phe_158b_mean, aes(x=Time, y=Mean, colour=miRNA))+ geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,0.6)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+   annotate("rect",xmin = 22.5, xmax=23.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+   annotate("rect",xmin = 27.5, xmax=39.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+annotate("rect",xmin = 44.5, xmax=45.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 46.5, xmax=47.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 48.5, xmax=51.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")
+
+boxASV6_phe_158b
+
+ASV6_phe_159_mean<-ASV6_phe_159 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_phe_159<- ggplot(ASV6_phe_159_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,0.6)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR159a")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+  annotate("rect",xmin = 45.5, xmax=46.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 50.5, xmax=51.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")
+boxASV6_phe_159
+
+ASV6_phe_827_mean<-ASV6_phe_827 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_phe_827<- ggplot(ASV6_phe_827_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,0.6)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR827")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV6_phe_827
+
+ASV6_phe_5642b_mean<-ASV6_phe_5642b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_phe_5642b<- ggplot(ASV6_phe_5642b_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,0.6)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR5642b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+annotate("rect",xmin = 24.5, xmax=29.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 30.5, xmax=34.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 35.5, xmax=36.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")
+boxASV6_phe_5642b
+
+
+ASV6_phe_mixmiR_mean<-ASV6_phe_mixmiR %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV6_phe_mixmiR<- ggplot(ASV6_phe_mixmiR_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,0.6)+theme_pubclean()+
+  theme(legend.position="none")+
+  theme(axis.text.x=element_text(size=8))+ggtitle("Mix of 5 miRNAs (10 μM)")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+
+  annotate("rect",xmin = -0.5, xmax=0.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 4.5, xmax=7.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 8.5, xmax=9.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 10.5, xmax=11.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 12.5, xmax=13.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 14.5, xmax=19.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")+
+  annotate("rect",xmin = 20.5, xmax=26.5, ymin = 0, ymax=0.6,alpha=.2, fill="steelblue4")
+boxASV6_phe_mixmiR
+
+ASV6_phe_plot<-ggarrange(boxASV6_phe_158a3p,boxASV6_phe_158b,boxASV6_phe_159,boxASV6_phe_827,boxASV6_phe_5642b,boxASV6_phe_mixmiR,common.legend = T, nrow=3, ncol=2)
+
+  ASV6_phe_plot1 <-annotate_figure(ASV6_phe_plot,
+             bottom = text_grob("Time (hours)", size = 14),
+             left = text_grob("Optical density (600 nm)",size = 14, rot=90), top = text_grob(bquote(italic(Acinetobacter) ~ "(ASV#6) L-phenylalanine"), size = 14))
+
+ASV6_phe_plot1
+
+ggsave(ASV6_phe_plot1, file=here("Output","Figures","ASV6_phe_vs_miRNAs.tiff"),width = 28, height = 28, units = "cm")
+
+```
+
+#boxplot ASV172
+```{r}
+repli<-5
+#To customize the x-axis breaks
+custom_breaks <- seq(0, 52, by = 4)
+custom_labels <- custom_breaks
+
+ASV172_158a3p_mean<-ASV172_158a3p %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV172_158a3p<- ggplot(ASV172_158a3p_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158a-3p")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV172_158a3p
+
+
+ASV172_158b_mean<-ASV172_158b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV172_158b<- ggplot(ASV172_158b_mean, aes(x=Time, y=Mean, colour=miRNA)) +geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR158b")+
+  theme(legend.title = element_blank())+ annotate("rect",xmin = 0.5, xmax=1.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 2.5, xmax=3.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 4.5, xmax=22.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 25.5, xmax=28.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 32.5, xmax=33.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 38.5, xmax=41.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV172_158b
+
+ASV172_159_mean<-ASV172_159 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV172_159<- ggplot(ASV172_159_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR159a")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)
+boxASV172_159
+
+ASV172_827_mean<-ASV172_827 %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV172_827<- ggplot(ASV172_827_mean, aes(x=Time, y=Mean,colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR827")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+ annotate("rect",xmin = 3.5, xmax=4.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 16.5, xmax=17.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 18.5, xmax=21.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 24.5, xmax=25.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")
+boxASV172_827
+
+ASV172_5642b_mean<-ASV172_5642b %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV172_5642b<- ggplot(ASV172_5642b_mean, aes(x=Time, y=Mean,colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("ath-miR5642b")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+ annotate("rect",xmin = 5.5, xmax=7.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")
+boxASV172_5642b
+
+
+ASV172_mixmiR_mean<-ASV172_mixmiR %>%
+  group_by(Time,miRNA) %>%
+  summarise(Mean = mean(OD_600),sd=sd(OD_600), se = sd / sqrt(repli))
+boxASV172_mixmiR<- ggplot(ASV172_mixmiR_mean, aes(x=Time, y=Mean, colour=miRNA)) +
+  geom_errorbar(alpha=0.4,aes(ymin=Mean-se, ymax=Mean+se), width=.3, position=position_dodge(1))+
+  geom_line(alpha=0.6)+
+  geom_point(position=position_dodge(1))+
+  scale_colour_manual(values = c("#2a7f62","#003049"), labels=c("Plant miRNAs","Scramble miRNAs"))+
+  scale_linetype_manual(values = c("solid", "dashed"), labels = c("Plant miRNAs", "Scramble miRNAs")) +
+  labs(x="", y="")+ ylim(0,2)+theme_pubclean()+
+  theme(axis.text.x=element_text(size=8))+ggtitle("Mix of 5 miRNAs (10 μM)")+
+  theme(legend.title = element_blank())+
+  scale_x_continuous(breaks = custom_breaks, labels = custom_labels)+ annotate("rect",xmin = 15.5, xmax=16.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 17.5, xmax=18.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 44.5, xmax=46.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")+ annotate("rect",xmin = 50.5, xmax=51.5, ymin = 0, ymax=2.0,alpha=.2, fill="steelblue4")
+boxASV172_mixmiR
+
+
+
+ASV172_plot<-ggarrange(boxASV172_158a3p,boxASV172_158b,boxASV172_159,boxASV172_827,boxASV172_5642b,boxASV172_mixmiR,nrow=3,ncol=2,common.legend = T)
+
+  ASV172_plot1 <-annotate_figure(ASV172_plot,
+             bottom = text_grob("Time (hours)", size = 14),
+             left = text_grob("Optical density (600 nm)",size = 14, rot=90), top = text_grob(bquote(italic(Chryseobacterium) ~ "(ASV#172) 17 AA mix"), size = 14))
+
+ASV172_plot1
+
+
+ggsave(ASV172_plot1, file=here("Output","Figures","ASV172_vs_miRNAs.tiff"),width = 28, height = 28, units = "cm")
+
+```
+
+#fusing plot into one
+```{r}
+#Removing legends
+
+boxASV6_mix_158a3p <- boxASV6_mix_158a3p +theme(legend.position = "none")
+boxASV6_mix_158b <- boxASV6_mix_158b+theme(legend.position = "none")
+boxASV6_mix_159 <-boxASV6_mix_159+theme(legend.position = "none")
+boxASV6_mix_827 <-boxASV6_mix_827+theme(legend.position = "none")
+boxASV6_mix_5642b <-boxASV6_mix_5642b+theme(legend.position = "none")
+boxASV6_mix_mixmiR <-boxASV6_mix_mixmiR+theme(legend.position = "none")
+
+boxASV6_phe_158a3p <- boxASV6_phe_158a3p +theme(legend.position = "none")
+boxASV6_phe_158b <- boxASV6_phe_158b+theme(legend.position = "none")
+boxASV6_phe_159 <-boxASV6_phe_159+theme(legend.position = "none")
+boxASV6_phe_827 <-boxASV6_phe_827+theme(legend.position = "none")
+boxASV6_phe_5642b <-boxASV6_phe_5642b+theme(legend.position = "none")
+boxASV6_phe_mixmiR <-boxASV6_phe_mixmiR+theme(legend.position = "none")
+
+boxASV172_158a3p <- boxASV172_158a3p +theme(legend.position = "none")
+boxASV172_158b <- boxASV172_158b+theme(legend.position = "none")
+boxASV172_159 <-boxASV172_159+theme(legend.position = "none")
+boxASV172_827 <-boxASV172_827+theme(legend.position = "none")
+boxASV172_5642b <-boxASV172_5642b+theme(legend.position = "none")
+boxASV172_mixmiR <-boxASV172_mixmiR+theme(legend.position = "none")
+
+##Arrange
+ASV4_plot2<-ggarrange(boxASV4_158a3p,boxASV4_158b,boxASV4_159,boxASV4_827,boxASV4_5642b,boxASV4_mixmiR,common.legend = T)
+ASV6_mix_plot2<-ggarrange(boxASV6_mix_158a3p,boxASV6_mix_158b,boxASV6_mix_159,boxASV6_mix_827,boxASV6_mix_5642b,boxASV6_mix_mixmiR,common.legend = F)
+ASV6_phe_plot2<-ggarrange(boxASV6_phe_158a3p,boxASV6_phe_158b,boxASV6_phe_159,boxASV6_phe_827,boxASV6_phe_5642b,boxASV6_phe_mixmiR,common.legend = F)
+ASV172_plot2<-ggarrange(boxASV172_158a3p,boxASV172_158b,boxASV172_159,boxASV172_827,boxASV172_5642b,boxASV172_mixmiR,common.legend = F)  
+  
+#annotate  
+ASV4_plot3<-annotate_figure(ASV4_plot2, top = text_grob(bquote(italic(Raoultella) ~ "(ASV#4) L-lysine"), size = 12, hjust = 2.4, vjust = 2))
+ASV6_mix_plot3 <-annotate_figure(ASV6_mix_plot2, top = text_grob(bquote(italic(Acinetobacter) ~ "(ASV#6) 17 AA mix"), size = 12, hjust = 2))
+ASV6_phe_plot3<-annotate_figure(ASV6_phe_plot2, top = text_grob(bquote(italic(Acinetobacter) ~ "(ASV#6) L-phenylalanine"), size = 12, hjust = 1.65))
+ASV172_plot3<-annotate_figure(ASV172_plot2, top = text_grob(bquote(italic(Chryseobacterium) ~ "(ASV#172) 17 AA mix"), size = 12, hjust = 1.68))
+
+all <- ggarrange(ASV4_plot3,ASV6_mix_plot3,ASV6_phe_plot3,ASV172_plot3, common.legend = T, ncol = 1)
+
+all <-annotate_figure(all,
+             bottom = text_grob("Time (hours)", size = 14),
+             left = text_grob("Optical density (600 nm)",size = 14, rot=90))
+ggsave(all, file=here("Output","Figures","ASVs_vs_miRNAs.tiff"),width = 28, height = 46, units = "cm")
+
+
+```
+
+#Saving boxplots as RDS for final figure
+
+```{r}
+boxASV6_phe_158b2<-boxASV6_phe_158b+ggtitle(expression(italic("Acinetobacter") ~ "ath-miR158b L-phenylalanine"))+theme(plot.title = element_text(size=12))+ theme(legend.position = "none")+scale_y_continuous(labels = scales::number_format(accuracy = 0.01))
+saveRDS(boxASV6_phe_158b2, file =here("Output","Figures","boxASV6_phe_158b.rds"))
+
+boxASV6_phe_mixmiR2<-boxASV6_phe_mixmiR+ggtitle(expression(italic("Acinetobacter") ~ "mix of 5 miRNAs L-phenylalanine"))+
+theme(plot.title = element_text(size=12))+ theme(legend.position = "none")+scale_y_continuous(labels = scales::number_format(accuracy = 0.01))
+saveRDS(boxASV6_phe_mixmiR2, file =here("Output","Figures","boxASV6_phe_mixmiR.rds"))
+
+boxASV4_158b2<-boxASV4_158b+ggtitle(expression(italic("Raoultella") ~ "ath-miR158b L-lysine"))+
+theme(plot.title = element_text(size=12))+ theme(legend.position = "none")+scale_y_continuous(labels = scales::number_format(accuracy = 0.01))
+saveRDS(boxASV4_158b2, file =here("Output","Figures","boxASV4_158b.rds"))
+
+boxASV4_AA_158b2<-boxASV4_AA_158b+ggtitle(expression(italic("Raoultella") ~ "ath-miR158b Mix of 17 AA"))+
+theme(plot.title = element_text(size=12))+ theme(legend.position = "none")+scale_y_continuous(labels = scales::number_format(accuracy = 0.01))
+saveRDS(boxASV4_AA_158b2, file =here("Output","Figures","boxASV4_AA_158b.rds"))
+
+boxASV172_158b2<-boxASV172_158b+ggtitle(expression(italic("Chryseobacterium") ~ "ath-miR158b Mix of 17 AA"))+
+theme(plot.title = element_text(size=12))+ theme(legend.position = "none")+scale_y_continuous(labels = scales::number_format(accuracy = 0.01))
+saveRDS(boxASV172_158b2, file =here("Output","Figures","boxASV172_158b.rds"))
+
+leg <- get_legend(boxASV6_phe_158b)
+
+mostsig <- ggarrange(boxASV6_phe_158b2,boxASV6_phe_mixmiR2,boxASV4_158b2,boxASV4_AA_158b2,boxASV172_158b2,leg, ncol = 2, nrow=3)
+
+mostsig2 <-annotate_figure(mostsig,
+             bottom = text_grob("Time (hours)", size = 14),left = text_grob("Optical density (600 nm)",size = 14, rot=90))
+
+saveRDS(mostsig2, file =here("Output","Figures","boxisolates_growth_mostsig.rds"))
+
+ggsave(mostsig2, file=here("Output","Figures","ASVs_vs_miRNAs_sig.tiff"),width = 22, height = 18, units = "cm")
+```
+
