@@ -19,8 +19,7 @@ E) The effect of miRNAs on the growth of three bacterial isolates (ASVgrowth_vs_
 F) The germination assay analyses where Arabidopsis was inoculated with bacterial isolates (Germination_test_ACR). 
 
 -Final_figures: 
-This folder contains
-All of the publication-ready figures for both the main text and supplementary material. 
+This folder contains all of the publication-ready figures for both the main text and supplementary material. 
 
 It is important to use the Rproject associated to the analyses you want to run. 
 In each subfolder, the Rproject, numbered as 1, must be opened prior to any RMD file. 
