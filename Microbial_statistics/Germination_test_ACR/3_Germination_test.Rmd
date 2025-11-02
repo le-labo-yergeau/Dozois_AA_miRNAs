@@ -122,7 +122,8 @@ combi2<-ggarrange(p_image,boxArabidopsis_fresh,labels = c('C','D'))
 combi3<- ggarrange(combi1, combi2,common.legend = T, legend='right', nrow=2)
 
 ggsave(combi3, file=here('Output', 'Figures','Fig_Combi.tiff'), compression='lzw', width=18, height=18, units='cm')
-saveRDS(combi3, file=here('Output','Figures', 'Fig_Arabi_isolates.rds'))
+saveRDS(combi3, file=here('Output','Figures', 'Fig_Arabi_isolates.rds'), compression="bzip2")
 
 ```
+
 
