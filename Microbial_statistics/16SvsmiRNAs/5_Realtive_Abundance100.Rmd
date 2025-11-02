@@ -94,23 +94,35 @@ combined_ASVs_sig <- combined_ASVs_sig %>%
 #Boxplot with ASVs of interest
 ```{r}
 combined_ASVs_sig$Treatment<-recode_factor(combined_ASVs_sig$Treatment, scramble= "Scramble miRNAs",plant="Plant miRNAs" )
-boxsig<- ggplot(combined_ASVs_sig, aes(x=Treatment, y=Relative_abundance*100)) +
-    geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment )) +
-  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge())+
+boxsig <- ggplot(combined_ASVs_sig, aes(x = Treatment, y = Relative_abundance * 100)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.4, aes(fill = Treatment, color = Treatment)) +
+  geom_point(aes(fill = Treatment, color = Treatment), 
+             pch = 21, position = position_jitterdodge()) +
   theme_light() +
-  facet_nested_wrap(~N_Source+Taxonomy, scales="free_y", nrow=1, nest_line = TRUE) +
-scale_x_discrete()+
-theme(axis.text.x=element_blank() ,axis.ticks.x = element_blank(),strip.background = element_rect(fill="white", linewidth =0, linetype="solid"))+
-theme(strip.text = element_text(colour = 'black', size=12))+
-scale_fill_manual(values = c("#003049","#2a7f62"))+
-scale_colour_manual(values = c("#003049","#2a7f62"))
-boxsig
+  facet_nested_wrap(~N_Source + Taxonomy,
+                    scales = "free_y",
+                    nrow = 1,
+                    nest_line = TRUE) +
+  theme(
+    strip.text = element_text(size = 12, color = "black", face = "italic"),
+    strip.background = element_rect(fill = "white", linewidth = 0),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    axis.title.y = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 12)
+  ) +
+  scale_fill_manual(values = c("#003049", "#2a7f62")) +
+  scale_colour_manual(values = c("#003049", "#2a7f62")) +
+  scale_y_continuous(labels = scales::number_format(accuracy = 0.01), limits = c(0, NA)) +
+  labs(x = "", y = "Relative abundance of taxa (%)")
 
 boxsig_2<-boxsig+theme(axis.title.y = element_text(size=12)) +labs(x="", y="Relative abundance of taxa (%)")+ theme(legend.title = element_text(size = 12) ,legend.text = element_text(size=12))+scale_y_continuous(labels = scales::number_format(accuracy = 0.01), limits = c(0, NA))
 boxsig_2
 
-  
-ggsave(boxsig_2, file=here("Output","ASVs_sig.tiff"),units="cm", width=28, height=12, compression='lzw')
+# Save base plot
+ggsave(boxsig_2, filename = here("Output", "ASVs_sig.tiff"),
+       width = 30, height = 12, units = "cm", compression = "lzw")
 
 ```
 
@@ -145,6 +157,7 @@ box_sig2<- boxsig_2+stat_pvalue_manual(
     stat.test.pos, hide.ns = TRUE, 
     label = "p.adj.signif",tip.length = 0, size=6)
 box_sig2
-ggsave(box_sig2, file=here("Output","ASVs_sig_stat.tiff"),units="cm", width=27, height=12, compression='lzw')
+ggsave(box_sig2, file=here("Output","ASVs_sig_stat.tiff"),units="cm", width=30, height=12, compression='lzw')
 saveRDS(box_sig2, file = here("Output","ASVs_sig_stat.rds"))
 ```
+
