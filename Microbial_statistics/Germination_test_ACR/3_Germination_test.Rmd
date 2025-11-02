@@ -93,22 +93,25 @@ Arabidopsis_Inflo
 
 #Fresh weight
 ```{r}
-Arabidopsis_fresh<-Arabidopsis[Arabidopsis$Date == 23,]
+Arabidopsis_fresh <- Arabidopsis[Arabidopsis$Date == 23,]
 
 boxArabidopsis_fresh <- ggplot(Arabidopsis_fresh, aes(x = Isolate, y = Fresh_weight)) +
   geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Isolate, color = Isolate)) +
   geom_point(aes(fill = Isolate, color = Isolate), pch = 21, position = position_jitterdodge()) +
   theme_light() +
-  theme(axis.text.x = element_blank()) +ylim(0,1.6)+
+  theme(axis.text.x = element_blank()) +
+  ylim(0, 1.6) +
   labs(x = "Endpoint (23 dpi)", y = "Fresh weight (g)") +
-  scale_fill_manual(values = c("#277da1", "#f8961e", "#f94144", "#1c3144")) +
-  scale_colour_manual(values = c("#277da1", "#f8961e", "#f94144", "#1c3144"))+ geom_pwc(
-  aes(group = Isolate), tip.length = 0.01,
-  method = "wilcox_test", label = "{p.adj.signif}",
-  p.adjust.method = "BH",y.position=c(0.9,1.14,1.36),
-  hide.ns = TRUE, label.size=5, size=0.5)
+  scale_fill_manual(
+    values = c("#277da1", "#f8961e", "#f94144", "#1c3144"),
+    guide = guide_legend(label.theme = element_text(face = "italic"))
+  ) + scale_colour_manual(
+    values = c("#277da1", "#f8961e", "#f94144", "#1c3144"),
+    guide = guide_legend(label.theme = element_text(face = "italic"))
+  ) + geom_pwc(
+    aes(group = Isolate), tip.length = 0.01, method = "wilcox_test",
+    label = "{p.adj.signif}", p.adjust.method = "BH", y.position = c(0.9, 1.14, 1.36), hide.ns = TRUE, label.size = 5, size = 0.5)
 boxArabidopsis_fresh
-
 ```
 
 #Combining figures
@@ -122,3 +125,4 @@ ggsave(combi3, file=here('Output', 'Figures','Fig_Combi.tiff'), compression='lzw
 saveRDS(combi3, file=here('Output','Figures', 'Fig_Arabi_isolates.rds'))
 
 ```
+
