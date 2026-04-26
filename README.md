@@ -1,4 +1,4 @@
-R code used for data manipulation, statistical analyses and figure generation for the manuscript "Plant miRNAs and amino acids interact to shape soil bacterial communities".
+R code used for data manipulation, statistical analyses and figure generation for the manuscript "Plant miRNAs influence soil bacterial growth and amino acid uptake, restructuring community composition". Available here: https://academic.oup.com/ismecommun/article/5/1/ycaf206/8317145?login=false.
 
 ![Graphical_Abstract_AA_miRs](https://github.com/user-attachments/assets/0225b308-9a6e-4e6a-9844-87894c62ad0d)
 
